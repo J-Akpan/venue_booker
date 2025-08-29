@@ -10,7 +10,8 @@ const DIALECT = process.env.DIALECT as any;
 
 const db_connect = new Sequelize(DB_NAME, USERNAME, PASSWORD, {
     host: HOST,
-    dialect: DIALECT
+    dialect: DIALECT, 
+    logging: false,
 });
 
 

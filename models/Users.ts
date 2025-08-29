@@ -22,7 +22,12 @@ const User = db_connect.define(
         password:{
             type: DataTypes.STRING,
             allowNull: false
-        }
+        },
+        role:{
+            type: DataTypes.ENUM('venue owner', 'user'),
+            defaultValue: 'user'
+        },
+
     },
 );
 
