@@ -1,5 +1,6 @@
 import {Sequelize,DataTypes} from "sequelize"
 import db_connect from "../config/db_connect";
+import Booking from "./Booking";
 
 const Venue = db_connect.define(
     'Venue',
@@ -36,5 +37,10 @@ const Venue = db_connect.define(
         }
     }
 )
+
+// Database associations
+Venue.hasMany(Booking, { foreignKey: 'venueId' }); // Assuming userId is the foreign key in venue
+Booking.belongsTo(Venue, { foreignKey: 'venueId' }); // Correct association
+
 
 export default Venue

@@ -13,7 +13,7 @@ const port: number = Number(process.env.PORT) || 3000;
 // route config
 app.use('/users', userRoutes)
 app.use('/venues', venueRoutes)
-app.use('/booking', bookingRoutes)
+app.use('/bookings', bookingRoutes)
 
 
 //middleware
