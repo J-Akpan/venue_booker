@@ -8,3 +8,15 @@ export const signupValidation = Joi.object({
     email: Joi.string().email().required()
 })
 
+export const loginValidation = Joi.object({
+    username: Joi.string().min(6).max(30).pattern(/^(?=.*\d)/).required(),
+    password: Joi.string().min(6).pattern(/^(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>])/).required()
+})
+
+export const profileValidation = Joi.object({
+    firstname: Joi.string().required(),
+    lastname: Joi.string().required(),
+    contact: Joi.string().required(),
+    address : Joi.string().required(),
+    gender: Joi.string().required(),
+})
