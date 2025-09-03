@@ -1,13 +1,13 @@
 import express from "express"
 import { Op, where } from "sequelize"
 import User from "../models/Users"
-import { signupValidation, loginValidation, profileValidation } from "../utilities/validatiton"
+import { signupValidation, loginValidation, profileValidation, changePasswordValidation, forgotPasswordValidation} from "../utilities/validatiton"
 import { encryptPassword, comparePassword } from "../utilities/encryptPassword"
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv";
 dotenv.config();
 import { AuthRequest } from "../middlewares/userAuth"
-import { log } from "console"
+import { generateOTP } from "../utilities/otpGenerator"
 
 // find all users
 export const allUsers = async (req: express.Request, res: express.Response) => {
@@ -172,18 +172,73 @@ export const profile = async (req: AuthRequest, res: express.Response) => {
 //forgot passward / change password
 export const changePassword = async (req: AuthRequest, res: express.Response) => {
     try {
-        const { email, oldPassword, newPassword } = req.body
+        const {  oldPassword, newPassword, confirmPassword } = req.body
+        
         //validate
-        
-       
-       
-        const userId = req.user?.userId
-        const pass = await User.findOne({where:{userId}})
-        const hashed = pass?.get('password')
-        
+        const {error}=changePasswordValidation.validate(req.body)
+        if(error){
+            return res.status(400).json({
+                message: "Validation error", details: error.details[0]?.message
+            })
+        }
+        if(newPassword !== confirmPassword){
+            return res.status(400).json({msg: "confirmed password not match"})
+        }
 
-        // await comparePassword(oldPassword, hashed)
+        //check if user exists
+        const pass = await User.findOne({ where: { userId: req.user?.userId } })
+        if (!pass) {
+            return res.status(400).json({ message: "User does not exist" })
+        }
+        const hashed = pass?.get('password')
+        //compare old password
+        const isPasswordValid = await comparePassword(oldPassword, hashed as string)
+        if (!isPasswordValid) {
+            return res.status(400).json({ message: "Invalid old password" })
+        }
+        //hash new password
+        const hashedNewPassword = await encryptPassword(newPassword)
+        //update password
+        const userId = req.user?.userId
+        const updatedPassword = await User.update(
+            { password: hashedNewPassword },
+            { where: { userId } }
+        )
+        if (updatedPassword) {
+            return res.status(200).json({ message: "Password updated successfully" })
+        }
+        return res.status(400).json({ message: "Password not updated" })
+
     } catch (error) {
         return res.status(500).json({ message: "Internal server error", error })
     }
+}
+
+// *****************************************************************************************
+
+export const forgotPassword = (req:AuthRequest, res:express.Response) =>{
+    const { email } = req.body
+
+    //validate
+    const {error}= forgotPasswordValidation.validate(req.body)
+    if(error){
+        return res.status(400).json({message: "Validation error", details: error.details[0]?.message
+        })
+    }
+
+    //check if user exists
+    const user = User.findOne({where: {email}})
+    if(!user){
+        return res.status(400).json({message: "User does not exist"})
+    }
+
+    //generate a token and send to user email
+    const otp = generateOTP()
+    console.log(otp);
+    //store the token in the database with expiry time
+
+    //verify the token and allow user to change password
+
+    return res.status(200).json({message: "Forgot password"})   
+
 }

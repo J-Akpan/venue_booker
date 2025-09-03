@@ -20,3 +20,14 @@ export const profileValidation = Joi.object({
     address : Joi.string().required(),
     gender: Joi.string().required(),
 })
+
+export const changePasswordValidation = Joi.object({
+    oldPassword: Joi.string().required(),
+    newPassword: Joi.string().min(6).pattern(/^(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>])/).required(),
+    confirmPassword : Joi.string().required()
+
+})
+
+export const forgotPasswordValidation = Joi.object({
+    email: Joi.string().email().required()
+})
