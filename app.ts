@@ -24,6 +24,7 @@ app.listen(port, async () =>{
     console.log(`Server running on http://localhost:${port}`);
     await db_connect.sync({
         force: false,
+        alter: true,
         // logging: false
         })
 })

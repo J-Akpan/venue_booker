@@ -1,13 +1,15 @@
 import express from "express"
 import { Op, where } from "sequelize"
 import User from "../models/Users"
-import { signupValidation, loginValidation, profileValidation, changePasswordValidation, forgotPasswordValidation} from "../utilities/validatiton"
+import { signupValidation, loginValidation, profileValidation, changePasswordValidation, forgotPasswordValidation } from "../utilities/validatiton"
 import { encryptPassword, comparePassword } from "../utilities/encryptPassword"
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv";
 dotenv.config();
 import { AuthRequest } from "../middlewares/userAuth"
 import { generateOTP } from "../utilities/otpGenerator"
+import { sendMail } from "../utilities/mailer"
+import { text } from "body-parser"
 
 // find all users
 export const allUsers = async (req: express.Request, res: express.Response) => {
@@ -155,12 +157,12 @@ export const profile = async (req: AuthRequest, res: express.Response) => {
                 address,
                 gender
             },
-            { where: { userId }}
+            { where: { userId } }
         )
-        if(updatedProfile){
-            return res.status(200).json({message: "Profile updated successfully"})
+        if (updatedProfile) {
+            return res.status(200).json({ message: "Profile updated successfully" })
         }
-        return res.status(400).json({message: "Profile not updated"})
+        return res.status(400).json({ message: "Profile not updated" })
 
     } catch (error) {
         return res.status(500).json({ message: "Internal server error", error })
@@ -172,17 +174,17 @@ export const profile = async (req: AuthRequest, res: express.Response) => {
 //forgot passward / change password
 export const changePassword = async (req: AuthRequest, res: express.Response) => {
     try {
-        const {  oldPassword, newPassword, confirmPassword } = req.body
-        
+        const { oldPassword, newPassword, confirmPassword } = req.body
+
         //validate
-        const {error}=changePasswordValidation.validate(req.body)
-        if(error){
+        const { error } = changePasswordValidation.validate(req.body)
+        if (error) {
             return res.status(400).json({
                 message: "Validation error", details: error.details[0]?.message
             })
         }
-        if(newPassword !== confirmPassword){
-            return res.status(400).json({msg: "confirmed password not match"})
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({ msg: "confirmed password not match" })
         }
 
         //check if user exists
@@ -216,29 +218,50 @@ export const changePassword = async (req: AuthRequest, res: express.Response) =>
 
 // *****************************************************************************************
 
-export const forgotPassword = (req:AuthRequest, res:express.Response) =>{
-    const { email } = req.body
+export const forgotPassword = async (req: AuthRequest, res: express.Response) => {
+    try {
 
-    //validate
-    const {error}= forgotPasswordValidation.validate(req.body)
-    if(error){
-        return res.status(400).json({message: "Validation error", details: error.details[0]?.message
-        })
+
+        const { email } = req.body
+        const userId = req.user?.userId
+
+        //validate
+        const { error } = forgotPasswordValidation.validate(req.body)
+        if (error) {
+            return res.status(400).json({
+                message: "Validation error", details: error.details[0]?.message
+            })
+        }
+
+        //check if user exists
+        const user = await User.findOne({ where: { userId, email } })
+        if (!user) {
+            return res.status(400).json({ message: "User does not exist" })
+        }
+
+        //generate a token and send to user email
+        const otp = generateOTP()
+
+        const mail = await sendMail(
+            email,
+            "Password reset OTP",
+            `Your OTP for password reset is ${otp} . It is valid for 10 minutes.`,
+            `<h3>Your OTP for password reset is ${otp}. It is valid for 10 minutes.</h3>`
+        )
+        console.log(mail);
+        if (mail) {
+            //store the token in the database with expiry time
+            const otpExpiry = new Date(Date.now() + 10 * 60 * 1000) //10 minutes from now
+            await User.update(
+                { otp, otpExpiry },
+                { where: { userId } }
+            )
+            return res.status(200).json({ message: "OTP sent to your email" })
+        }
+        return res.status(500).json({ message: "Error in sending email" })
+
+        //verify the token and allow user to change passw
+    } catch (error) {
+        return res.status(500).json({ message: "Internal server error", error })
     }
-
-    //check if user exists
-    const user = User.findOne({where: {email}})
-    if(!user){
-        return res.status(400).json({message: "User does not exist"})
-    }
-
-    //generate a token and send to user email
-    const otp = generateOTP()
-    console.log(otp);
-    //store the token in the database with expiry time
-
-    //verify the token and allow user to change password
-
-    return res.status(200).json({message: "Forgot password"})   
-
 }
