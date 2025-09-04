@@ -1,7 +1,7 @@
 import express from "express"
 import { Op, where } from "sequelize"
 import User from "../models/Users"
-import { signupValidation, loginValidation, profileValidation, changePasswordValidation, forgotPasswordValidation } from "../utilities/validatiton"
+import { signupValidation, loginValidation, profileValidation, changePasswordValidation, forgotPasswordValidation, changeValidation } from "../utilities/validatiton"
 import { encryptPassword, comparePassword } from "../utilities/encryptPassword"
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv";
@@ -249,19 +249,70 @@ export const forgotPassword = async (req: AuthRequest, res: express.Response) =>
             `<h3>Your OTP for password reset is ${otp}. It is valid for 10 minutes.</h3>`
         )
         console.log(mail);
-        if (mail) {
-            //store the token in the database with expiry time
-            const otpExpiry = new Date(Date.now() + 10 * 60 * 1000) //10 minutes from now
-            await User.update(
-                { otp, otpExpiry },
-                { where: { userId } }
-            )
-            return res.status(200).json({ message: "OTP sent to your email" })
+        if (!mail) {
+            return res.status(500).json({ message: "Error in sending email" })
         }
-        return res.status(500).json({ message: "Error in sending email" })
-
-        //verify the token and allow user to change passw
+        //store the token in the database with expiry time
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000) //10 minutes from now
+        await User.update(
+            { otp, otpExpiry },
+            { where: { userId } }
+        )
+        return res.status(200).json({ message: "OTP sent to your email" })        
     } catch (error) {
         return res.status(500).json({ message: "Internal server error", error })
     }
 }
+
+
+// ****************************************************************************************************
+
+//check if user exists      
+//verify token
+//set new password
+//invalidate the token
+
+export const resetPassword = async (req: AuthRequest, res: express.Response) => {
+    try {
+        const userId = req.user?.userId
+        const { otp, newPassword, confirmPassword } = req.body
+
+        //validate
+        const { error } = changeValidation.validate(req.body)
+        if (error) {
+            return res.status(400).json({
+                message: "Validation error", details: error.details[0]?.message
+            })
+        }
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({ msg: "confirmed password not match" })
+        }
+
+        //check if user exists
+        const user = await User.findOne({ where: { userId } })
+        if (!user) {
+            return res.status(400).json({ message: "User does not exist" })
+        }
+
+        //verify token
+        const storedOtp = user.get('otp')
+        const otpExpiry = user.get('otpExpiry')
+        
+        if (storedOtp !== otp) {
+           return res.status(400).json({ message: "Invalid OTP" })
+        }   
+
+        const hashs = await encryptPassword(newPassword)
+        const updatepassword = await User.update({password: hashs}, {
+            where: {userId}
+        })
+        if(!updatepassword){
+            return res.status(400).json({msg: "Fail to update passwoerd"})
+        }
+        return res.status(201).json({msg: "Password reset successful"})
+    } catch (error) {
+        return res.status(500).json({ message: "Internal server error", error })
+    }
+   
+}
+// **************************************************************************************************** 

@@ -31,3 +31,10 @@ export const changePasswordValidation = Joi.object({
 export const forgotPasswordValidation = Joi.object({
     email: Joi.string().email().required()
 })
+
+export const changeValidation = Joi.object({
+    otp: Joi.string().required(),
+    newPassword: Joi.string().min(6).pattern(/^(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>])/).required(),
+    confirmPassword : Joi.string().required()
+
+})
