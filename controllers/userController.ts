@@ -300,6 +300,7 @@ export const resetPassword = async (req: AuthRequest, res: express.Response) => 
         
         if (storedOtp !== otp) {
            return res.status(400).json({ message: "Invalid OTP" })
+
         }   
 
         const hashs = await encryptPassword(newPassword)
@@ -316,3 +317,7 @@ export const resetPassword = async (req: AuthRequest, res: express.Response) => 
    
 }
 // **************************************************************************************************** 
+
+export const search = (req:AuthRequest, res:express.Response)=>{
+    
+}
