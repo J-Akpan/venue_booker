@@ -297,10 +297,14 @@ export const resetPassword = async (req: AuthRequest, res: express.Response) => 
         //verify token
         const storedOtp = user.get('otp')
         const otpExpiry = user.get('otpExpiry')
+
+        // const createdAt = user.get('createdAt')
+        if (otpExpiry < new Date() ){
+            return res.status(400).json({msg: "OTP expired"})
+        }
         
         if (storedOtp !== otp) {
            return res.status(400).json({ message: "Invalid OTP" })
-
         }   
 
         const hashs = await encryptPassword(newPassword)
@@ -318,6 +322,4 @@ export const resetPassword = async (req: AuthRequest, res: express.Response) => 
 }
 // **************************************************************************************************** 
 
-export const search = (req:AuthRequest, res:express.Response)=>{
-    
-}
+
