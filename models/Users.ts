@@ -10,7 +10,7 @@ interface UserAttributes {
     username: string;
     email: string;
     password: string;
-    role: 'venue owner' | 'user';
+    role: 'Venue Owner' | 'User' | 'Admin';
     firstname: string;
     lastname: string;
     contact: string;
@@ -22,7 +22,7 @@ interface UserAttributes {
 
 // Some attributes are optional in `User.build` and `User.create` calls
 interface UserCreationAttributes extends Optional<UserAttributes,
-    'userId' | 'role' | 'firstname' | 'lastname' | 'contact' | 'address' | 'gender' | 'otp' | 'otpExpiry' > { }
+    'userId' | 'role' | 'firstname' | 'lastname' | 'contact' | 'address' | 'gender' | 'otp' | 'otpExpiry'> { }
 
 // Define the User model class
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
@@ -30,7 +30,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
     public username!: string;
     public email!: string;
     public password!: string;
-    public role!: 'venue owner' | 'user';
+    public role!: 'Venue Owner' | 'User' | 'Admin';
     public firstname!: string;
     public lastname!: string;
     public contact!: string;
@@ -66,8 +66,8 @@ User.init(
             allowNull: false
         },
         role: {
-            type: DataTypes.ENUM('venue owner', 'user'),
-            defaultValue: 'user'
+            type: DataTypes.ENUM('Venue Owner', 'User', 'Admin'),
+            defaultValue: 'User'
         },
         firstname: {
             type: DataTypes.STRING,
@@ -96,7 +96,7 @@ User.init(
         otpExpiry: {
             type: DataTypes.DATE,
             allowNull: true
-        }   
+        }
     },
 
     {

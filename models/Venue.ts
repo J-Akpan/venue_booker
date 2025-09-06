@@ -36,14 +36,13 @@ class Venue extends Model<VenueAttributes, VenueCreationAttributes> implements V
     // You can also add instance methods here if needed
 }
 
-Venue.init = (
+Venue.init(
     {
-    
-        venueId:{
+    venueId:{ 
             type: DataTypes.UUID,
             defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
-            unique: true,
+            unique: true
         },
         names:{
             type: DataTypes.STRING,
@@ -69,10 +68,11 @@ Venue.init = (
             allowNull : false
         },
         userId:{
-            type: DataTypes.STRING,
+            type: DataTypes.UUID,
+            defaultValue: DataTypes.UUIDV4,
             allowNull : false
         },
-        constact:{
+        contact:{
             type: DataTypes.STRING,
             allowNull : false
         },
@@ -80,7 +80,12 @@ Venue.init = (
             type: DataTypes.STRING,
             allowNull : true
         },
-    })
+    },
+    {
+        sequelize: db_connect, // passing the `sequelize` instance is required
+        tableName: 'venues', // specify the table name
+    }
+)
 
 // Database associations
 Venue.hasMany(Booking, { foreignKey: 'venueId' }); // Assuming userId is the foreign key in venue

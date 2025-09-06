@@ -1,10 +1,10 @@
 import express from "express"
-import Joi from "joi"
+import Joi, { string } from "joi"
 
 export const signupValidation = Joi.object({
     username: Joi.string().min(6).max(30).pattern(/^(?=.*\d)/).required(),
     password: Joi.string().min(6).pattern(/^(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>])/).required(),
-    role: Joi.string().valid('user', 'venue owner').required(),
+    role: Joi.string().valid('User', 'Venue Owner', 'Admin').required(),
     email: Joi.string().email().required()
 })
 
@@ -17,14 +17,14 @@ export const profileValidation = Joi.object({
     firstname: Joi.string().required(),
     lastname: Joi.string().required(),
     contact: Joi.string().required(),
-    address : Joi.string().required(),
+    address: Joi.string().required(),
     gender: Joi.string().required(),
 })
 
 export const changePasswordValidation = Joi.object({
     oldPassword: Joi.string().required(),
     newPassword: Joi.string().min(6).pattern(/^(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>])/).required(),
-    confirmPassword : Joi.string().required()
+    confirmPassword: Joi.string().required()
 
 })
 
@@ -35,6 +35,19 @@ export const forgotPasswordValidation = Joi.object({
 export const changeValidation = Joi.object({
     otp: Joi.string().required(),
     newPassword: Joi.string().min(6).pattern(/^(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>])/).required(),
-    confirmPassword : Joi.string().required()
+    confirmPassword: Joi.string().required()
 
+})
+
+// **********************************************************************************************************?
+// venue validatikon
+// ************************************************************
+
+export const newVenueValidation = Joi.object({
+    names: Joi.string().required(),
+    description: Joi.string().required(),
+    location: Joi.string().required(),
+    capacity: Joi.string().required(),
+    pricePerHour : Joi.string().required(),
+    contact: Joi.string().required()
 })

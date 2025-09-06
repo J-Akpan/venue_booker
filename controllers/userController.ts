@@ -1,7 +1,12 @@
 import express from "express"
 import { Op, where } from "sequelize"
 import User from "../models/Users"
-import { signupValidation, loginValidation, profileValidation, changePasswordValidation, forgotPasswordValidation, changeValidation } from "../utilities/validatiton"
+import { signupValidation, 
+    loginValidation, 
+    profileValidation, 
+    changePasswordValidation, 
+    forgotPasswordValidation, 
+    changeValidation } from "../utilities/validatiton"
 import { encryptPassword, comparePassword } from "../utilities/encryptPassword"
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv";
