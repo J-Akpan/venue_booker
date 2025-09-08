@@ -15,7 +15,7 @@ interface VenueAttributes {
     pictures:string;
 }
 // Some attributes are optional in `User.build` and `User.create` calls
-interface VenueCreationAttributes extends Optional<VenueAttributes, 'pictures' > { }
+interface VenueCreationAttributes extends Optional<VenueAttributes, 'venueId' |'pictures' > { }
 
 // Define the User model class
 class Venue extends Model<VenueAttributes, VenueCreationAttributes> implements VenueAttributes {

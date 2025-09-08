@@ -7,7 +7,8 @@ import { signupValidation,
     changePasswordValidation, 
     forgotPasswordValidation, 
     changeValidation } from "../utilities/validatiton"
-import { encryptPassword, comparePassword } from "../utilities/encryptPassword"
+import { encryptPassword, 
+    comparePassword } from "../utilities/encryptPassword"
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv";
 dotenv.config();
