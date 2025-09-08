@@ -1,6 +1,5 @@
 import express from "express"
-import allVenues from "../controllers/venueController"
-import { newVenue } from "../controllers/venueController"
+import { allVenues, newVenue } from "../controllers/venueController"
 import { authenticateUser } from "../middlewares/userAuth"
 
 const venueRoutes:express.Router = express.Router()
