@@ -2,7 +2,11 @@ import express from "express"
 import { AuthRequest } from "../middlewares/userAuth"
 import Venue from "../models/Venue"
 import User from "../models/Users"
-import { newVenueValidation } from "../utilities/validatiton"
+import { newVenueValidation, 
+    updateVenueValidation,
+    deleteVenueValidation,
+    searchVenueValidation
+ } from "../utilities/validatiton"
 
 // find all users
 
@@ -19,7 +23,6 @@ export const allVenues = async (req: express.Request, res: express.Response) => 
 
 export const newVenue = async (req: AuthRequest, res: express.Response) => {
     try {
-        const user = await User.findOne()
 
         //req body
         const { names, description, location, capacity, pricePerHour, contact } = req.body
@@ -29,9 +32,14 @@ export const newVenue = async (req: AuthRequest, res: express.Response) => {
             res.status(400).json({ msg: "Validation error", details: error.details[0]?.message })
         }
 
-        const userId = user?.get('userId')
+        const userId = req.user?.userId
         if(!userId){
             return res.status(400).json({msg: "error getting the ID"})
+        }
+
+        const ifVenueExist = await Venue.findOne({where: {userId, names}})
+        if (ifVenueExist){
+            return res.status(400).json({msg: "A venue with same name is already registered by you"})
         }
 
         const createVenue = await Venue.create({
@@ -57,4 +65,63 @@ export const newVenue = async (req: AuthRequest, res: express.Response) => {
 // ***********************************************************************************
 
 //Update venue details
+export const venueUpdate = async (req:AuthRequest, res:express.Response) =>{
+    const userId = req.user?.userId
+    const { names, description, location, capacity, pricePerHour, contact } = req.body
 
+    const {error} = updateVenueValidation.validate(req.body)
+    if(error){
+        return res.status(400).json({msg: "Validation error", details: error.details[0]?.message})
+    }
+
+    const ifVenueExist = await Venue.findOne({where: {userId, names}})
+    if (!ifVenueExist){return res.status(400).json({msg: "You don't have venue with such name to update"})}
+
+    const update = await Venue.update(
+        {names, description, location, capacity, pricePerHour, contact},
+        {where: {userId, names}
+    })
+
+    if (!update){
+        return res.status(400).json({msg: "Error while updating "})
+    }
+    return res.status(201).json({msg: "Update successful"})   
+}
+
+// *******************************************************************************************
+// delete venue
+
+export const deleteVenue = async (req: AuthRequest, res: express.Response) =>{
+    const userId = req.user?.userId
+    const {names} = req.body
+
+    const {error} = deleteVenueValidation.validate(req.body)
+    if(error){
+        return res.status(400).json({msg: "validation error", details: error.details[0]?.message})
+    }
+
+    const venueExist = await Venue.findOne({where: {userId, names}})
+    if(!venueExist) {
+        return res.status(404).json({msg: " Venue not  found"})
+    }
+    await Venue.destroy({where: {userId, names}})
+    return res.status(201).json({msg: "Venue deleted successfully"})
+}
+
+// ******************************************************************************************************?
+
+//search venues by users based on location, price, capacity
+
+export const searchVenue = (req:AuthRequest, res:express.Response) =>{
+    const {searchTerm} = req.body
+
+    const {error} = searchVenueValidation.validate(req.body)
+    if(error){
+        return res.status(400).json({msg: "Validation error", details: error.details[0]?.message})
+    }
+
+    
+
+
+
+}

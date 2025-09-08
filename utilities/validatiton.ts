@@ -51,3 +51,20 @@ export const newVenueValidation = Joi.object({
     pricePerHour : Joi.string().required(),
     contact: Joi.string().required()
 })
+
+export const updateVenueValidation = Joi.object({
+    names: Joi.string().required(),
+    description: Joi.string(),
+    location: Joi.string(),
+    capacity: Joi.string(),
+    pricePerHour : Joi.string(),
+    contact: Joi.string()
+})
+
+export const deleteVenueValidation = Joi.object({
+    names: Joi.string().required()
+})
+
+export const searchVenueValidation = Joi.object({
+    searchTerm: Joi.string().required()
+})
