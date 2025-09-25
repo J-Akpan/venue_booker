@@ -1,4 +1,5 @@
 import express from "express"
+import {Op} from "sequelize"
 import { AuthRequest } from "../middlewares/userAuth"
 import Venue from "../models/Venue"
 import User from "../models/Users"
@@ -112,7 +113,7 @@ export const deleteVenue = async (req: AuthRequest, res: express.Response) =>{
 
 //search venues by users based on location, price, capacity
 
-export const searchVenue = (req:AuthRequest, res:express.Response) =>{
+export const searchVenue = async (req:AuthRequest, res:express.Response) =>{
     const {searchTerm} = req.body
 
     const {error} = searchVenueValidation.validate(req.body)
@@ -120,8 +121,38 @@ export const searchVenue = (req:AuthRequest, res:express.Response) =>{
         return res.status(400).json({msg: "Validation error", details: error.details[0]?.message})
     }
 
-    
+    const search = await Venue.findAll(
+     {where: {
+        [Op.or]: [
+         { names: {[Op.iLike]: `%${searchTerm}%`}},
+          {capacity: {[Op.iLike]: `%${searchTerm}%`}},
+          {pricePerHour: {[Op.iLike]: `%${searchTerm}%`}},
+          {location: {[Op.iLike]: `%${searchTerm}%`}},
+        ]
+     }}
+    )
+    if(!search){
+        return res.status(400).json({msg: "Search term not found"})
+    }
 
-
-
+    return res.status(200).json(search)
 }
+
+// ********************************************************************************************************************************?
+//list all venues registered by a single user
+export const allUserVenue = async (req:AuthRequest, res:express.Response)=>{
+    const userId = req.user?.userId
+
+    const ownerVenue = await User.findAll({
+        include: {model: Venue,
+            where: {userId}
+        }
+    })
+    if (ownerVenue){
+        return res.status(200).json(ownerVenue)
+    }
+
+    return res.status(400).json({msg: "Server error"})
+
+} 
+

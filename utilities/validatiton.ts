@@ -68,3 +68,4 @@ export const deleteVenueValidation = Joi.object({
 export const searchVenueValidation = Joi.object({
     searchTerm: Joi.string().required()
 })
+

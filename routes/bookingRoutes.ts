@@ -1,9 +1,10 @@
 import express from "express"
-import allBookings from "../controllers/bookingController"
+import { authenticateUser } from "../middlewares/userAuth"
+import { allBookings } from "../controllers/bookingController"
 
 const bookingRoutes:express.Router = express.Router()
 
-bookingRoutes.get('/', allBookings)
+bookingRoutes.get('/', authenticateUser, allBookings)
 
 
 export default bookingRoutes
