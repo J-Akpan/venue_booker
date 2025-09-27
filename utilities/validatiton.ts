@@ -69,3 +69,12 @@ export const searchVenueValidation = Joi.object({
     searchTerm: Joi.string().required()
 })
 
+export const bookingValidation = Joi.object({
+    venueId: Joi.string().required(),
+    bookingDate: Joi.date().required(),
+    bookingEndDate: Joi.date().required(),
+    startTime: Joi.string().required(),
+    endTime: Joi.string().required(),
+    totalPrice: Joi.number().required()
+})
+// **********************************************************************************************************
