@@ -1,4 +1,4 @@
-import {Sequelize,DataTypes, Model, Optional} from "sequelize"
+import { Sequelize, DataTypes, Model, Optional } from "sequelize"
 import db_connect from "../config/db_connect";
 
 
@@ -14,7 +14,7 @@ interface BookingAttributes {
     totalPrice: string;
 }
 // Some attributes are optional in `User.build` and `User.create` calls
-interface BookingCreationAttributes extends Optional<BookingAttributes, 'bookingId' > { }
+interface BookingCreationAttributes extends Optional<BookingAttributes, 'bookingId'> { }
 
 // Define the User model class
 class Booking extends Model<BookingAttributes, BookingCreationAttributes> implements BookingAttributes {
@@ -26,7 +26,7 @@ class Booking extends Model<BookingAttributes, BookingCreationAttributes> implem
     public startTime!: string;
     public endTime!: string;
     public totalPrice !: string;
-    
+
     // timestamps!
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
@@ -36,44 +36,44 @@ class Booking extends Model<BookingAttributes, BookingCreationAttributes> implem
 
 Booking.init(
     {
-    bookingId:{ 
+        bookingId: {
             type: DataTypes.UUID,
             defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
             unique: true
         },
-        userId:{
+        userId: {
             type: DataTypes.UUID,
             defaultValue: DataTypes.UUIDV4,
-            allowNull : false
+            allowNull: false
 
         },
-        venueId:{
+        venueId: {
             type: DataTypes.UUID,
             defaultValue: DataTypes.UUIDV4,
-            allowNull : false
+            allowNull: false
         },
-        bookingDate:{
+        bookingDate: {
             type: DataTypes.DATEONLY,
-            allowNull : false
+            allowNull: false
 
         },
-        bookingEndDate:{
+        bookingEndDate: {
             type: DataTypes.DATEONLY,
-            allowNull : false
+            allowNull: false
 
         },
-        startTime:{
+        startTime: {
             type: DataTypes.TIME,
-            allowNull : false
+            allowNull: false
         },
-        endTime:{
+        endTime: {
             type: DataTypes.TIME,
-            allowNull : false
+            allowNull: false
         },
-        totalPrice:{
+        totalPrice: {
             type: DataTypes.FLOAT,
-            allowNull : false
+            allowNull: false
         },
     },
     {

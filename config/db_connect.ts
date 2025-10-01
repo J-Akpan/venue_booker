@@ -5,12 +5,13 @@ dotenv.config();
 const DB_NAME = process.env.DB_NAME as string;
 const USERNAME = process.env.DB_USERNAME as string;
 const PASSWORD = process.env.DB_PASSWORD as string;
+// const PASSWORD = 'Akpan123' as string; 
 const HOST = process.env.HOST as string;
-const DIALECT = process.env.DIALECT as any;
+// const DIALECT = process.env.DIALECT as any;
 
 const db_connect = new Sequelize(DB_NAME, USERNAME, PASSWORD, {
     host: HOST,
-    dialect: DIALECT, 
+    dialect: 'postgres',
     logging: false,
 });
 

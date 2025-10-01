@@ -20,6 +20,7 @@
     "@types/nodemailer": "^7.0.1",
     "@types/otp-generator": "^4.0.2",
     "@types/sequelize": "^6.12.0",
+    "@types/stripe": "^8.0.416",
     "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
     "dotenv": "^17.2.1",
@@ -38,5 +39,8 @@
     "sequelize-typescript": "^2.1.6",
     "stripe": "^18.5.0",
     "ts-node": "^10.9.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }
