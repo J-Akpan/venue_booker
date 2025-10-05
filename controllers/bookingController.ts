@@ -39,8 +39,7 @@ export const newBooking = async (req: AuthRequest, res: express.Response) => {
         const { error } = bookingValidation.validate(req.body)
         if (error) {
             return res.status(400).json({
-                msg: "Server Error",
-                error: error.details[0]?.message
+                msg: "Server Error", error: error.details[0]?.message
             })
         }
         const checkVenue = await Venue.findOne({ where: { venueId } })

@@ -1,3 +1,4 @@
+import e from "express"
 import express from "express"
 import Joi, { string } from "joi"
 
@@ -48,7 +49,7 @@ export const newVenueValidation = Joi.object({
     description: Joi.string().required(),
     location: Joi.string().required(),
     capacity: Joi.string().required(),
-    pricePerHour : Joi.string().required(),
+    pricePerHour: Joi.string().required(),
     contact: Joi.string().required()
 })
 
@@ -57,7 +58,7 @@ export const updateVenueValidation = Joi.object({
     description: Joi.string(),
     location: Joi.string(),
     capacity: Joi.string(),
-    pricePerHour : Joi.string(),
+    pricePerHour: Joi.string(),
     contact: Joi.string()
 })
 
@@ -78,3 +79,16 @@ export const bookingValidation = Joi.object({
     totalPrice: Joi.number().required()
 })
 // **********************************************************************************************************
+
+// payment validation
+// **********************************************************************************************************       
+export const paymentValidation = Joi.object({
+    bookingId: Joi.string().required(),
+    transactionId: Joi.string().required(),
+    amount: Joi.number().required(),
+    currency: Joi.string().valid('USD', 'NGN').required(),
+    paymentMethod: Joi.string().valid('Card', 'Transfer', 'Cash', 'Wallet').required(),
+    status: Joi.string().valid('Pending', 'Completed', 'Failed', 'Refunded').required(),
+    paymentDate: Joi.date().required(),
+    receiptUrl: Joi.string().uri().optional()
+}); 

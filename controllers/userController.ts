@@ -1,14 +1,18 @@
 import express from "express"
 import { Op, where } from "sequelize"
 import User from "../models/Users"
-import { signupValidation, 
-    loginValidation, 
-    profileValidation, 
-    changePasswordValidation, 
-    forgotPasswordValidation, 
-    changeValidation } from "../utilities/validatiton"
-import { encryptPassword, 
-    comparePassword } from "../utilities/encryptPassword"
+import {
+    signupValidation,
+    loginValidation,
+    profileValidation,
+    changePasswordValidation,
+    forgotPasswordValidation,
+    changeValidation
+} from "../utilities/validatiton"
+import {
+    encryptPassword,
+    comparePassword
+} from "../utilities/encryptPassword"
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv";
 dotenv.config();
@@ -264,7 +268,7 @@ export const forgotPassword = async (req: AuthRequest, res: express.Response) =>
             { otp, otpExpiry },
             { where: { userId } }
         )
-        return res.status(200).json({ message: "OTP sent to your email" })        
+        return res.status(200).json({ message: "OTP sent to your email" })
     } catch (error) {
         return res.status(500).json({ message: "Internal server error", error })
     }
@@ -305,26 +309,26 @@ export const resetPassword = async (req: AuthRequest, res: express.Response) => 
         const otpExpiry = user.get('otpExpiry')
 
         // const createdAt = user.get('createdAt')
-        if (otpExpiry < new Date() ){
-            return res.status(400).json({msg: "OTP expired"})
+        if (otpExpiry < new Date()) {
+            return res.status(400).json({ msg: "OTP expired" })
         }
-        
+
         if (storedOtp !== otp) {
-           return res.status(400).json({ message: "Invalid OTP" })
-        }   
+            return res.status(400).json({ message: "Invalid OTP" })
+        }
 
         const hashs = await encryptPassword(newPassword)
-        const updatepassword = await User.update({password: hashs}, {
-            where: {userId}
+        const updatepassword = await User.update({ password: hashs }, {
+            where: { userId }
         })
-        if(!updatepassword){
-            return res.status(400).json({msg: "Fail to update passwoerd"})
+        if (!updatepassword) {
+            return res.status(400).json({ msg: "Fail to update passwoerd" })
         }
-        return res.status(201).json({msg: "Password reset successful"})
+        return res.status(201).json({ msg: "Password reset successful" })
     } catch (error) {
         return res.status(500).json({ message: "Internal server error", error })
     }
-   
+
 }
 // **************************************************************************************************** 
 

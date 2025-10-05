@@ -26,22 +26,22 @@ interface UserCreationAttributes extends Optional<UserAttributes,
 
 // Define the User model class
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
-    public userId!: string;
-    public username!: string;
-    public email!: string;
-    public password!: string;
-    public role!: 'Venue Owner' | 'User' | 'Admin';
-    public firstname!: string;
-    public lastname!: string;
-    public contact!: string;
-    public address !: string;
-    public gender!: 'Male' | 'Female' | 'Other';
-    public otp!: string;
-    public otpExpiry!: Date;
+    declare userId: string;
+    declare username: string;
+    declare email: string;
+    declare password: string;
+    declare role: 'Venue Owner' | 'User' | 'Admin';
+    declare firstname: string;
+    declare lastname: string;
+    declare contact: string;
+    declare address: string;
+    declare gender: 'Male' | 'Female' | 'Other';
+    declare otp: string;
+    declare otpExpiry: Date;
 
     // timestamps!
-    public readonly createdAt!: Date;
-    public readonly updatedAt!: Date;
+    declare readonly createdAt: Date;
+    declare readonly updatedAt: Date;
 
     // You can also add instance methods here if needed
 }

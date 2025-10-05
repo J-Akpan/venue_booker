@@ -3,6 +3,7 @@ import db_connect from './config/db_connect';
 import userRoutes from './routes/usersRoute';
 import venueRoutes from './routes/venueRoutes';
 import bookingRoutes from './routes/bookingRoutes';
+import paymentRoutes from './routes/paymentRoutes';
 
 
 const app: express.Application = express();
@@ -18,13 +19,14 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/users', userRoutes)
 app.use('/venues', venueRoutes)
 app.use('/bookings', bookingRoutes)
+app.use('/payments', paymentRoutes)
 
 
-app.listen(port, async () =>{
+app.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}`);
     await db_connect.sync({
         force: false,
         alter: true,
         // logging: false
-        })
+    })
 })
