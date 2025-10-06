@@ -48,12 +48,10 @@ export const processPayment = async (req: AuthRequest, res: express.Response) =>
         // Check if the booking exists and belongs to the user
         const booking = await Booking.findOne({ where: { userId }, include: [User, Venue] })
         if (!booking) { return res.status(404).json({ msg: "Booking not found" }) }
-        // console.log(booking)
 
         // Extract payment details from booking
         const amount = Number(booking.getDataValue('totalPrice'))
-        const currency = 'usd' // or derive from booking/venue details
-        //get user email from the associated User model
+        const currency = 'usd'
         const userEmail = (booking as any).User.getDataValue('email')
         const venueName = (booking as any).Venue.getDataValue('names')
         const name = (booking as any).User.getDataValue('lastName')
@@ -62,12 +60,11 @@ export const processPayment = async (req: AuthRequest, res: express.Response) =>
          to ${booking.getDataValue('endTime')}`
         console.log(venueName)
 
-
-
-
         // Create a payment intent
         const session = await stripe.checkout.sessions.create({
             success_url: 'https://example.com/success',
+            cancel_url: 'https://example.com/cancel',
+            payment_method_types: ['card'],
             customer_email: userEmail,
             line_items: [
                 {
@@ -86,9 +83,7 @@ export const processPayment = async (req: AuthRequest, res: express.Response) =>
 
         });
         console.log(session)
-
         return res.status(200).json({ url: session.url })
-
     } catch (error) {
         console.error("Error processing payment:", error)
         return res.status(500).json({ msg: "Internal server error" })
