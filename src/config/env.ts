@@ -27,7 +27,8 @@ const schema = Joi.object({
     DB_REPLICA_HOST: Joi.string().allow("").default(""),
     DB_POOL_MAX: Joi.number().integer().min(1).default(10),
     DB_SSL: Joi.boolean().default(false),
-    DB_SYNC: Joi.boolean().default(false), // dev convenience only; use migrations in production
+    // Creates missing tables on boot. On by default outside production; in production run `npm run db:init` or set it explicitly.
+    DB_SYNC: Joi.boolean().default(process.env.NODE_ENV !== "production"),
 
     // Redis (cache, rate limit, queue). Optional: the app degrades gracefully without it.
     REDIS_URL: Joi.string().uri({ scheme: ["redis", "rediss"] }).allow("").default(""),
