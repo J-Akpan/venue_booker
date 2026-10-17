@@ -1,0 +1,91 @@
+# Rolling-update deployment. Apply with: kubectl apply -f deploy/k8s/
+# Secrets (DB_PASSWORD, JWT_SECRET, STRIPE_*, EMAIL_PASS) come from a Secret named venue-booker-secrets;
+# create it from your secret manager (External Secrets / Sealed Secrets / `kubectl create secret`), never from git.
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: venue-booker-config }
+data:
+  NODE_ENV: production
+  TRUST_PROXY: "1"
+  DB_HOST: postgres-primary
+  DB_REPLICA_HOST: postgres-replica
+  DB_NAME: venue_booker
+  DB_USER: venue
+  REDIS_URL: redis://redis:6379
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: venue-booker, labels: { app: venue-booker } }
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }   # never drop below desired capacity during a deploy
+  selector: { matchLabels: { app: venue-booker } }
+  template:
+    metadata:
+      labels: { app: venue-booker }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "4000", prometheus.io/path: /metrics }
+    spec:
+      terminationGracePeriodSeconds: 40
+      securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: venue-booker } } }
+      containers:
+        - name: api
+          image: ghcr.io/OWNER/venue-booker:latest   # CI pins this to the commit SHA
+          ports: [{ containerPort: 4000 }]
+          envFrom:
+            - configMapRef: { name: venue-booker-config }
+            - secretRef: { name: venue-booker-secrets }
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { memory: 384Mi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          startupProbe:  { httpGet: { path: /health/live, port: 4000 }, failureThreshold: 30, periodSeconds: 2 }
+          livenessProbe: { httpGet: { path: /health/live, port: 4000 }, periodSeconds: 10, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: /health/ready, port: 4000 }, periodSeconds: 5, failureThreshold: 2 }
+          lifecycle:
+            preStop: { exec: { command: ["sleep", "5"] } }   # let the endpoint be removed from the Service before SIGTERM
+---
+apiVersion: v1
+kind: Service
+metadata: { name: venue-booker }
+spec:
+  selector: { app: venue-booker }
+  ports: [{ port: 80, targetPort: 4000 }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: venue-booker }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: venue-booker }
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 65 } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: venue-booker }
+spec:
+  minAvailable: 2
+  selector: { matchLabels: { app: venue-booker } }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: venue-booker
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 1m
+    nginx.ingress.kubernetes.io/load-balance: ewma     # latency-aware balancing
+spec:
+  ingressClassName: nginx
+  tls: [{ hosts: [api.example.com], secretName: venue-booker-tls }]
+  rules:
+    - host: api.example.com
+      http:
+        paths: [{ path: /, pathType: Prefix, backend: { service: { name: venue-booker, port: { number: 80 } } } }]

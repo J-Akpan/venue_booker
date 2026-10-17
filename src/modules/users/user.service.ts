@@ -1,0 +1,178 @@
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto"
+import bcrypt from "bcryptjs"
+import { Op } from "sequelize"
+import { env } from "../../config/env"
+import { sequelize } from "../../config/database"
+import { badRequest, notFound, unauthorized } from "../../shared/errors"
+import { signAccessToken } from "../../shared/middleware/auth"
+import { publish } from "../../shared/events"
+import { PageQuery, toOffset } from "../../shared/pagination"
+import { RefreshToken, User } from "./user.model"
+
+const BCRYPT_COST = 12
+const OTP_TTL_MS = 10 * 60_000
+const OTP_MAX_ATTEMPTS = 5
+// Used to burn the same CPU time when the account doesn't exist, so login timing doesn't reveal valid emails.
+const DUMMY_HASH = bcrypt.hashSync("not-a-real-password", BCRYPT_COST)
+
+const sha256 = (value: string) => createHash("sha256").update(value).digest("hex")
+const hmac = (value: string) => createHmac("sha256", env.jwt.secret).update(value).digest("hex")
+
+export const toPublicUser = (u: User) => ({
+    userId: u.userId,
+    username: u.username,
+    email: u.email,
+    role: u.role,
+    firstname: u.firstname,
+    lastname: u.lastname,
+    contact: u.contact,
+    address: u.address,
+    gender: u.gender,
+    createdAt: u.createdAt,
+})
+
+// ---- tokens ---------------------------------------------------------------------------------
+
+const issueTokens = async (user: Pick<User, "userId" | "role">, family?: { transaction: any }) => {
+    const refreshToken = randomBytes(48).toString("base64url")
+    await RefreshToken.create(
+        {
+            userId: user.userId,
+            tokenHash: sha256(refreshToken),
+            expiresAt: new Date(Date.now() + env.jwt.refreshTtlDays * 86_400_000),
+            revokedAt: null,
+        },
+        family,
+    )
+    return { accessToken: signAccessToken({ userId: user.userId, role: user.role }), refreshToken }
+}
+
+const revokeAllTokens = (userId: string, transaction?: any) =>
+    RefreshToken.update({ revokedAt: new Date() }, { where: { userId, revokedAt: null }, transaction })
+
+// ---- registration / login -------------------------------------------------------------------
+
+export const signUp = async (input: { username: string; email: string; password: string; role: "User" | "Venue Owner" }) => {
+    const email = input.email.trim().toLowerCase()
+    const existing = await User.findOne({ where: { [Op.or]: [{ email }, { username: input.username }] }, useMaster: true })
+    if (existing) throw badRequest("Username or email is already registered")
+
+    const user = await User.create({
+        username: input.username,
+        email,
+        password: await bcrypt.hash(input.password, BCRYPT_COST),
+        role: input.role,
+        firstname: null,
+        lastname: null,
+        contact: null,
+        address: null,
+        gender: null,
+        otpHash: null,
+        otpExpiry: null,
+    })
+    publish("user.registered", { userId: user.userId, email: user.email, username: user.username })
+    return toPublicUser(user)
+}
+
+export const login = async (input: { username?: string; email?: string; password: string }) => {
+    const where = input.email ? { email: input.email.trim().toLowerCase() } : { username: input.username! }
+    const user = await User.scope("withSecrets").findOne({ where, useMaster: true })
+    const valid = await bcrypt.compare(input.password, user?.password ?? DUMMY_HASH)
+    if (!user || !valid) throw unauthorized("Invalid credentials")
+
+    return { user: toPublicUser(user), ...(await issueTokens(user)) }
+}
+
+/** Rotate the refresh token. Re-use of an already-rotated token means it leaked: revoke the whole session set. */
+export const refresh = async (refreshToken: string) => {
+    return sequelize.transaction(async (transaction) => {
+        const stored = await RefreshToken.findOne({ where: { tokenHash: sha256(refreshToken) }, transaction, lock: transaction.LOCK.UPDATE })
+        if (!stored || stored.expiresAt < new Date()) throw unauthorized("Refresh token is invalid or expired")
+        if (stored.revokedAt) {
+            await revokeAllTokens(stored.userId, transaction)
+            throw unauthorized("Refresh token was already used")
+        }
+        const user = await User.findByPk(stored.userId, { transaction })
+        if (!user) throw unauthorized()
+        await stored.update({ revokedAt: new Date() }, { transaction })
+        return issueTokens(user, { transaction })
+    })
+}
+
+export const logout = async (refreshToken: string) => {
+    await RefreshToken.update({ revokedAt: new Date() }, { where: { tokenHash: sha256(refreshToken), revokedAt: null } })
+}
+
+// ---- profile --------------------------------------------------------------------------------
+
+export const getUser = async (userId: string) => {
+    const user = await User.findByPk(userId)
+    if (!user) throw notFound("User")
+    return toPublicUser(user)
+}
+
+export const updateProfile = async (
+    userId: string,
+    changes: Partial<Pick<User, "firstname" | "lastname" | "contact" | "address" | "gender">>,
+) => {
+    const user = await User.findByPk(userId, { useMaster: true })
+    if (!user) throw notFound("User")
+    await user.update(changes)
+    return toPublicUser(user)
+}
+
+export const listUsers = async (page: PageQuery) => {
+    const { rows, count } = await User.findAndCountAll({ ...toOffset(page), order: [["createdAt", "DESC"]] })
+    return { rows: rows.map(toPublicUser), total: count }
+}
+
+// ---- passwords ------------------------------------------------------------------------------
+
+export const changePassword = async (userId: string, oldPassword: string, newPassword: string) => {
+    const user = await User.scope("withSecrets").findByPk(userId, { useMaster: true })
+    if (!user) throw notFound("User")
+    if (!(await bcrypt.compare(oldPassword, user.password))) throw badRequest("Old password is incorrect")
+
+    await sequelize.transaction(async (transaction) => {
+        await user.update({ password: await bcrypt.hash(newPassword, BCRYPT_COST) }, { transaction })
+        await revokeAllTokens(userId, transaction) // sign out every other session
+    })
+}
+
+/** Always succeeds from the caller's point of view, so the endpoint can't be used to discover which emails exist. */
+export const requestPasswordReset = async (email: string) => {
+    const user = await User.findOne({ where: { email: email.trim().toLowerCase() }, useMaster: true })
+    if (!user) return
+
+    const otp = String(randomInt(0, 1_000_000)).padStart(6, "0")
+    await user.update({ otpHash: hmac(`${user.userId}:${otp}`), otpExpiry: new Date(Date.now() + OTP_TTL_MS), otpAttempts: 0 })
+    publish("user.passwordResetRequested", { email: user.email, otp })
+}
+
+export const resetPassword = async (email: string, otp: string, newPassword: string) => {
+    const invalid = badRequest("Invalid or expired code")
+    const user = await User.scope("withSecrets").findOne({ where: { email: email.trim().toLowerCase() }, useMaster: true })
+    if (!user || !user.otpHash || !user.otpExpiry || user.otpExpiry < new Date() || user.otpAttempts >= OTP_MAX_ATTEMPTS) throw invalid
+
+    const expected = Buffer.from(user.otpHash)
+    const actual = Buffer.from(hmac(`${user.userId}:${otp}`))
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+        await user.increment("otpAttempts") // 6-digit codes are brute-forceable without an attempt cap
+        throw invalid
+    }
+
+    await sequelize.transaction(async (transaction) => {
+        await user.update(
+            { password: await bcrypt.hash(newPassword, BCRYPT_COST), otpHash: null, otpExpiry: null, otpAttempts: 0 },
+            { transaction },
+        ) // the code is single-use
+        await revokeAllTokens(user.userId, transaction)
+    })
+}
+
+// ---- used by other modules (via ./index) ----------------------------------------------------
+
+export const getContact = async (userId: string) => {
+    const user = await User.findByPk(userId)
+    return user ? { email: user.email, name: user.firstname || user.username } : null
+}

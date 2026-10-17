@@ -1,0 +1,10 @@
+# Just the backing services for local development:
+#   docker compose -f docker-compose.dev.yml up -d && npm run dev
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_DB: venue_booker, POSTGRES_USER: postgres, POSTGRES_PASSWORD: devpass }
+    ports: ["${PG_PORT:-5432}:5432"]
+  redis:
+    image: redis:7-alpine
+    ports: ["${REDIS_PORT:-6379}:6379"]
