@@ -53,6 +53,17 @@ export const initNotifications = () => {
         if (contact) await queueEmail({ to: contact.email, subject: "Booking confirmed", text: `Hi ${contact.name}, your booking ${bookingId} is confirmed.` })
     })
 
+    subscribe("case.resolved", async ({ raisedBy, caseId, type, outcome, resolution }) => {
+        const contact = await getContact(raisedBy)
+        if (contact) {
+            await queueEmail({
+                to: contact.email,
+                subject: `Your ${type} has been ${outcome}`,
+                text: `Hi ${contact.name}, your ${type} (${caseId}) was ${outcome}.\n\nResolution: ${resolution}`,
+            })
+        }
+    })
+
     subscribe("booking.cancelled", async ({ userId, bookingId, refund }) => {
         const contact = await getContact(userId)
         if (contact) {

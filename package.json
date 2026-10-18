@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:init": "tsx scripts/db-init.ts"
+    "db:init": "tsx scripts/db-init.ts",
+    "create-super-admin": "tsx scripts/create-super-admin.ts"
   },
   "author": "J-Akpan",
   "license": "ISC",

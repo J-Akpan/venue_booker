@@ -54,3 +54,21 @@ describe("requireRole", () => {
         expect(next).toHaveBeenCalled()
     })
 })
+
+describe("requireRole: staff tiers", () => {
+    const call = (role: string, ...allowed: any[]) => {
+        const next = vi.fn()
+        const err = run(() => requireRole(...allowed)({ user: { userId: "u", role } } as any, {} as any, next))
+        return { err, called: next.mock.calls.length > 0 }
+    }
+    it("Admin is blocked from Super Admin-only routes", () => {
+        expect(call("Admin", "Super Admin").err?.status).toBe(403)
+    })
+    it("Super Admin passes everything", () => {
+        expect(call("Super Admin", "Super Admin").called).toBe(true)
+        expect(call("Super Admin", "Admin").called).toBe(true)
+    })
+    it("Admin passes Admin routes", () => {
+        expect(call("Admin", "Admin").called).toBe(true)
+    })
+})

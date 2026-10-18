@@ -14,6 +14,7 @@ export interface DomainEvents {
     "booking.created": { bookingId: string; userId: string; venueId: string }
     "booking.confirmed": { bookingId: string; userId: string; venueId: string }
     "booking.cancelled": { bookingId: string; userId: string; venueId: string; refund: boolean }
+    "case.resolved": { caseId: string; raisedBy: string; type: "complaint" | "dispute"; outcome: "resolved" | "rejected"; resolution: string }
 }
 
 const bus = new EventEmitter()

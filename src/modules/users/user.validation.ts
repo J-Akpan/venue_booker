@@ -47,3 +47,18 @@ export const resetPasswordSchema = Joi.object({
 })
 
 export const listUsersSchema = Joi.object({ ...paginationSchema })
+
+export const createStaffSchema = Joi.object({
+    username: Joi.string().alphanum().min(3).max(30).required(),
+    email: Joi.string().email().max(254).required(),
+    password: password.required(),
+    firstname: Joi.string().max(80),
+    lastname: Joi.string().max(80),
+})
+
+export const assignRoleSchema = Joi.object({
+    // "Super Admin" is deliberately not assignable through the API.
+    role: Joi.string().valid("User", "Venue Owner", "Admin").required(),
+})
+
+export const userIdParamSchema = Joi.object({ userId: Joi.string().uuid().required() })

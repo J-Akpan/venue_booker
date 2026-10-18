@@ -3,7 +3,10 @@ import jwt from "jsonwebtoken"
 import { env } from "../../config/env"
 import { forbidden, unauthorized } from "../errors"
 
-export type Role = "User" | "Venue Owner" | "Admin"
+export type Role = "User" | "Venue Owner" | "Admin" | "Super Admin"
+
+/** Platform staff: Admin (support staff) and Super Admin. */
+export const isStaff = (role: Role | undefined) => role === "Admin" || role === "Super Admin"
 
 export interface AuthUser {
     userId: string
@@ -42,10 +45,15 @@ export const authenticate = (req: Request, _res: Response, next: NextFunction) =
     }
 }
 
-/** AuthZ (RBAC): allow only the listed roles. Admin always passes. */
+/**
+ * AuthZ (RBAC): allow only the listed roles. Super Admin always passes. Admin passes everything
+ * except routes reserved for Super Admin alone.
+ */
 export const requireRole = (...roles: Role[]) => (req: Request, _res: Response, next: NextFunction) => {
     const role = req.user?.role
     if (!role) throw unauthorized()
-    if (role !== "Admin" && !roles.includes(role)) throw forbidden()
+    if (role === "Super Admin") return next()
+    if (role === "Admin" && roles.some((r) => r !== "Super Admin")) return next()
+    if (!roles.includes(role)) throw forbidden()
     next()
 }

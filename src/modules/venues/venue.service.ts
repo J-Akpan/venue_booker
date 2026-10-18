@@ -3,7 +3,7 @@ import { cached, invalidateNamespace } from "../../shared/cache"
 import { forbidden, notFound } from "../../shared/errors"
 import { publish } from "../../shared/events"
 import { PageQuery, toOffset } from "../../shared/pagination"
-import type { AuthUser } from "../../shared/middleware/auth"
+import { isStaff, type AuthUser } from "../../shared/middleware/auth"
 import { Venue } from "./venue.model"
 
 const CACHE_NS = "venues"
@@ -64,7 +64,7 @@ export const createVenue = async (ownerId: string, input: Omit<Parameters<typeof
 const loadOwned = async (venueId: string, actor: AuthUser) => {
     const venue = await Venue.findByPk(venueId, { useMaster: true })
     if (!venue) throw notFound("Venue")
-    if (venue.ownerId !== actor.userId && actor.role !== "Admin") throw forbidden("You do not own this venue")
+    if (venue.ownerId !== actor.userId && !isStaff(actor.role)) throw forbidden("You do not own this venue")
     return venue
 }
 

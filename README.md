@@ -19,6 +19,9 @@ Production-like stack (nginx load balancer → 2 app replicas → Postgres + Red
 DB_PASSWORD=... JWT_SECRET=... docker compose up --build     # http://localhost:8080
 ```
 
+Create the Super Admin (no HTTP endpoint exists for this on purpose):
+`SUPER_ADMIN_USERNAME=root SUPER_ADMIN_EMAIL=you@example.com SUPER_ADMIN_PASSWORD='at-least-12-chars' npm run create-super-admin`
+
 Other scripts: `npm test` · `npm run typecheck` · `npm run build` · `npm run db:init` (create schema once) · `scripts/backup-db.sh`.
 
 Redis is optional: without `REDIS_URL` the app still runs (no cache, per-process rate limits, in-process jobs).
@@ -46,6 +49,12 @@ Errors always look like `{ "error": { "code", "message", "details?", "requestId"
 | `POST /payments/checkout` | booker | `{ bookingId }` → Stripe Checkout `url` |
 | `GET /payments/booking/:bookingId` | booker | |
 | `POST /payments/webhook` | Stripe | signature-verified; point Stripe at it |
+| `POST·GET /support/cases` · `GET /support/cases/:id` | booker / venue owner | raise a `complaint` or a `dispute` (needs `bookingId`, caller must be a party to it); follow your own cases |
+| `GET /admin/cases` · `GET /admin/cases/:id` | Admin, Super Admin | queue; filters `status, type, assignedTo, unassigned` (oldest first) |
+| `POST /admin/cases/:id/assign` | Admin (self), Super Admin (anyone) | |
+| `POST /admin/cases/:id/resolve` | assignee, or Super Admin | `{ outcome: resolved\|rejected, resolution, bookingAction? }`; `bookingAction: "cancel_and_refund"` is Super Admin only |
+| `GET·POST /admin/staff` · `DELETE /admin/staff/:userId` | Super Admin | list / create Admin staff / demote to User |
+| `PUT /admin/users/:userId/role` | Super Admin | `User`, `Venue Owner` or `Admin`; not yourself, not another Super Admin |
 | `GET /health/live` · `/health/ready` · `/metrics` | ops | outside `/api` |
 
 Typical flow: signup → login → `POST /bookings` (slot held 15 min) → `POST /payments/checkout` → pay on Stripe → webhook confirms the booking.

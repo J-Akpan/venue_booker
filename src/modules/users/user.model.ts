@@ -32,7 +32,7 @@ User.init(
             },
         },
         password: { type: DataTypes.STRING, allowNull: false },
-        role: { type: DataTypes.ENUM("Venue Owner", "User", "Admin"), allowNull: false, defaultValue: "User" },
+        role: { type: DataTypes.ENUM("Venue Owner", "User", "Admin", "Super Admin"), allowNull: false, defaultValue: "User" },
         firstname: { type: DataTypes.STRING(80), allowNull: true },
         lastname: { type: DataTypes.STRING(80), allowNull: true },
         contact: { type: DataTypes.STRING(32), allowNull: true },

@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs"
 import { Op } from "sequelize"
 import { env } from "../../config/env"
 import { sequelize } from "../../config/database"
-import { badRequest, notFound, unauthorized } from "../../shared/errors"
+import { badRequest, forbidden, notFound, unauthorized } from "../../shared/errors"
 import { signAccessToken } from "../../shared/middleware/auth"
 import { publish } from "../../shared/events"
 import { PageQuery, toOffset } from "../../shared/pagination"
@@ -176,3 +176,67 @@ export const getContact = async (userId: string) => {
     const user = await User.findByPk(userId)
     return user ? { email: user.email, name: user.firstname || user.username } : null
 }
+
+// ---- super admin: staff & role management ---------------------------------------------------
+
+/** Create a platform staff account (role Admin). Only reachable through Super Admin routes. */
+export const createStaff = async (input: { username: string; email: string; password: string; firstname?: string; lastname?: string }) => {
+    const email = input.email.trim().toLowerCase()
+    const existing = await User.findOne({ where: { [Op.or]: [{ email }, { username: input.username }] }, useMaster: true })
+    if (existing) throw badRequest("Username or email is already registered")
+
+    const user = await User.create({
+        username: input.username,
+        email,
+        password: await bcrypt.hash(input.password, BCRYPT_COST),
+        role: "Admin",
+        firstname: input.firstname ?? null,
+        lastname: input.lastname ?? null,
+        contact: null,
+        address: null,
+        gender: null,
+        otpHash: null,
+        otpExpiry: null,
+    })
+    publish("user.registered", { userId: user.userId, email: user.email, username: user.username })
+    return toPublicUser(user)
+}
+
+export const listStaff = async (page: PageQuery) => {
+    const { rows, count } = await User.findAndCountAll({
+        where: { role: { [Op.in]: ["Admin", "Super Admin"] } },
+        order: [["createdAt", "DESC"]],
+        ...toOffset(page),
+        useMaster: true,
+    })
+    return { rows: rows.map(toPublicUser), total: count }
+}
+
+/**
+ * Change a user's role. Guard rails: no self-changes (can't lock yourself out or self-escalate),
+ * Super Admins can't be modified here, and Super Admin can't be granted through the API at all
+ * (use scripts/create-super-admin.ts).
+ */
+export const assignRole = async (actorId: string, targetId: string, role: "User" | "Venue Owner" | "Admin") => {
+    if (actorId === targetId) throw badRequest("You can't change your own role")
+    return sequelize.transaction(async (transaction) => {
+        const target = await User.findByPk(targetId, { transaction, lock: transaction.LOCK.UPDATE })
+        if (!target) throw notFound("User")
+        if (target.role === "Super Admin") throw forbidden("A Super Admin's role can't be changed here")
+        const previousRole = target.role
+        if (previousRole !== role) {
+            await target.update({ role }, { transaction })
+            await revokeAllTokens(targetId, transaction) // old tokens still carry the old role: force a fresh sign-in
+        }
+        return { user: toPublicUser(target), previousRole }
+    })
+}
+
+/** Role of a staff member, or null if the user does not exist or is not staff. Used when assigning cases. */
+export const getStaffRole = async (userId: string) => {
+    const user = await User.findByPk(userId)
+    return user && (user.role === "Admin" || user.role === "Super Admin") ? user.role : null
+}
+
+/** Remove staff access: demote to a normal user and sign them out everywhere. */
+export const removeStaff = (actorId: string, targetId: string) => assignRole(actorId, targetId, "User")

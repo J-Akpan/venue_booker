@@ -5,7 +5,7 @@ import { businessEvents } from "../../shared/metrics"
 import { conflict, forbidden, notFound, badRequest } from "../../shared/errors"
 import { publish } from "../../shared/events"
 import { PageQuery, toOffset } from "../../shared/pagination"
-import type { AuthUser } from "../../shared/middleware/auth"
+import { isStaff, type AuthUser } from "../../shared/middleware/auth"
 import { getVenueForBooking, getVenueSummaries, isVenueOwner } from "../venues"
 import { assertValidSlot, calculateTotal } from "./booking.pricing"
 import { Booking } from "./booking.model"
@@ -81,7 +81,7 @@ export const listUserBookings = async (userId: string, page: PageQuery) => {
 }
 
 export const listVenueBookings = async (venueId: string, actor: AuthUser, page: PageQuery) => {
-    if (actor.role !== "Admin" && !(await isVenueOwner(venueId, actor.userId))) throw forbidden("You do not own this venue")
+    if (!isStaff(actor.role) && !(await isVenueOwner(venueId, actor.userId))) throw forbidden("You do not own this venue")
     const { rows, count } = await Booking.findAndCountAll({ where: { venueId }, order: [["startsAt", "DESC"]], ...toOffset(page), useMaster: true })
     return { rows: rows.map(present), total: count }
 }
@@ -89,7 +89,7 @@ export const listVenueBookings = async (venueId: string, actor: AuthUser, page: 
 export const getBooking = async (bookingId: string, actor: AuthUser) => {
     const booking = await Booking.findByPk(bookingId, { useMaster: true })
     if (!booking) throw notFound("Booking")
-    if (booking.userId !== actor.userId && actor.role !== "Admin" && !(await isVenueOwner(booking.venueId, actor.userId))) {
+    if (booking.userId !== actor.userId && !isStaff(actor.role) && !(await isVenueOwner(booking.venueId, actor.userId))) {
         throw notFound("Booking") // 404, not 403: don't reveal that someone else's booking id exists
     }
     return (await withVenues([booking]))[0]!
@@ -100,11 +100,11 @@ export const cancelBooking = async (bookingId: string, actor: AuthUser) => {
         const booking = await Booking.findByPk(bookingId, { transaction, lock: transaction.LOCK.UPDATE })
         if (!booking) throw notFound("Booking")
         const isOwner = booking.userId === actor.userId
-        if (!isOwner && actor.role !== "Admin" && !(await isVenueOwner(booking.venueId, actor.userId))) throw notFound("Booking")
+        if (!isOwner && !isStaff(actor.role) && !(await isVenueOwner(booking.venueId, actor.userId))) throw notFound("Booking")
 
         if (booking.status === "cancelled") return { booking, refund: false, changed: false } // idempotent
         if (booking.status === "expired") throw badRequest("Booking has already expired")
-        if (isOwner && actor.role !== "Admin" && booking.startsAt <= new Date()) throw badRequest("Booking has already started")
+        if (isOwner && !isStaff(actor.role) && booking.startsAt <= new Date()) throw badRequest("Booking has already started")
 
         const refund = booking.status === "confirmed"
         await booking.update({ status: "cancelled", cancelledAt: new Date(), expiresAt: null }, { transaction })

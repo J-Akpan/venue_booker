@@ -10,7 +10,8 @@ import healthRoutes from "./shared/health"
 import { requestId } from "./shared/middleware/requestId"
 import { apiLimiter } from "./shared/middleware/rateLimit"
 import { errorHandler, notFoundHandler } from "./shared/middleware/errorHandler"
-import { userRoutes } from "./modules/users"
+import { userRoutes, userAdminRoutes } from "./modules/users"
+import { supportRoutes, caseAdminRoutes } from "./modules/support"
 import { venueRoutes } from "./modules/venues"
 import { bookingRoutes } from "./modules/bookings"
 import { paymentRoutes, stripeWebhook } from "./modules/payments"
@@ -42,6 +43,9 @@ export const createApp = () => {
     api.use("/venues", venueRoutes)
     api.use("/bookings", bookingRoutes)
     api.use("/payments", paymentRoutes)
+    api.use("/support", supportRoutes)
+    api.use("/admin/cases", caseAdminRoutes)
+    api.use("/admin", userAdminRoutes)
     app.use("/api/v1", api)
 
     app.use(notFoundHandler)
