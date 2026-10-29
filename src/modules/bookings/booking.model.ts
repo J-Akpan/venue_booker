@@ -13,6 +13,7 @@ export class Booking extends Model<InferAttributes<Booking>, InferCreationAttrib
     declare currency: string
     declare status: CreationOptional<BookingStatus>
     declare expiresAt: Date | null // end of the unpaid hold on the slot
+    declare confirmedPaymentId: CreationOptional<string | null>
     declare idempotencyKey: string | null
     declare cancelledAt: Date | null
     declare readonly createdAt: CreationOptional<Date>
@@ -30,6 +31,7 @@ Booking.init(
         currency: { type: DataTypes.STRING(3), allowNull: false },
         status: { type: DataTypes.ENUM("pending", "confirmed", "cancelled", "expired"), allowNull: false, defaultValue: "pending" },
         expiresAt: { type: DataTypes.DATE, allowNull: true },
+        confirmedPaymentId: { type: DataTypes.UUID, allowNull: true, defaultValue: null },
         idempotencyKey: { type: DataTypes.STRING(64), allowNull: true },
         cancelledAt: { type: DataTypes.DATE, allowNull: true },
         createdAt: DataTypes.DATE,

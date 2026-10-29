@@ -1,4 +1,4 @@
-import { Op, UniqueConstraintError, ExclusionConstraintError } from "sequelize"
+import { Op, UniqueConstraintError, ExclusionConstraintError, Transaction } from "sequelize"
 import { env } from "../../config/env"
 import { sequelize } from "../../config/database"
 import { businessEvents } from "../../shared/metrics"
@@ -10,7 +10,10 @@ import { getVenueForBooking, getVenueSummaries, isVenueOwner } from "../venues"
 import { assertValidSlot, calculateTotal } from "./booking.pricing"
 import { Booking } from "./booking.model"
 
-const present = (b: Booking) => ({ ...b.toJSON(), totalPrice: Number(b.totalPrice) })
+const present = (b: Booking) => {
+    const { confirmedPaymentId: _confirmedPaymentId, ...data } = b.toJSON()
+    return { ...data, totalPrice: Number(b.totalPrice) }
+}
 
 /**
  * Create a PENDING booking that holds the slot for BOOKING_HOLD_MINUTES while the customer pays.
@@ -95,8 +98,8 @@ export const getBooking = async (bookingId: string, actor: AuthUser) => {
     return (await withVenues([booking]))[0]!
 }
 
-export const cancelBooking = async (bookingId: string, actor: AuthUser) => {
-    const result = await sequelize.transaction(async (transaction) => {
+export const cancelBooking = async (bookingId: string, actor: AuthUser, parentTransaction?: Transaction) => {
+    const update = async (transaction: Transaction) => {
         const booking = await Booking.findByPk(bookingId, { transaction, lock: transaction.LOCK.UPDATE })
         if (!booking) throw notFound("Booking")
         const isOwner = booking.userId === actor.userId
@@ -109,12 +112,17 @@ export const cancelBooking = async (bookingId: string, actor: AuthUser) => {
         const refund = booking.status === "confirmed"
         await booking.update({ status: "cancelled", cancelledAt: new Date(), expiresAt: null }, { transaction })
         return { booking, refund, changed: true }
-    })
+    }
+    const result = parentTransaction ? await update(parentTransaction) : await sequelize.transaction(update)
 
     if (result.changed) {
-        businessEvents.inc({ event: "booking_cancelled" })
-        // Compensation step of the saga: the payments module listens and refunds if money was taken.
-        publish("booking.cancelled", { bookingId, userId: result.booking.userId, venueId: result.booking.venueId, refund: result.refund })
+        const afterCommit = () => {
+            businessEvents.inc({ event: "booking_cancelled" })
+            // Compensation step of the saga: the payments module listens and refunds if money was taken.
+            publish("booking.cancelled", { bookingId, userId: result.booking.userId, venueId: result.booking.venueId, refund: result.refund })
+        }
+        if (parentTransaction) parentTransaction.afterCommit(afterCommit)
+        else afterCommit()
     }
     return present(result.booking)
 }
@@ -126,28 +134,35 @@ export const getBookingForPayment = async (bookingId: string) => {
     return b ? { ...present(b) } : null
 }
 
-export type ConfirmResult = "confirmed" | "already_confirmed" | "slot_lost"
+export interface ConfirmResult {
+    outcome: "confirmed" | "already_confirmed" | "slot_lost"
+    confirmedPaymentId: string | null
+}
 
 /** Called when payment succeeds. Idempotent, so duplicate webhook deliveries are harmless. */
-export const confirmBooking = async (bookingId: string): Promise<ConfirmResult> => {
+export const confirmBooking = async (bookingId: string, paymentId?: string): Promise<ConfirmResult> => {
     try {
         const { result, booking } = await sequelize.transaction(async (transaction) => {
             const booking = await Booking.findByPk(bookingId, { transaction, lock: transaction.LOCK.UPDATE })
             if (!booking) throw notFound("Booking")
-            if (booking.status === "confirmed") return { result: "already_confirmed" as ConfirmResult, booking }
-            if (booking.status === "cancelled") return { result: "slot_lost" as ConfirmResult, booking }
+            if (booking.status === "confirmed") {
+                // Backfill a legacy confirmed booking the first time its paid webhook is replayed.
+                if (!booking.confirmedPaymentId && paymentId) await booking.update({ confirmedPaymentId: paymentId }, { transaction })
+                return { result: "already_confirmed" as const, booking }
+            }
+            if (booking.status === "cancelled") return { result: "slot_lost" as const, booking }
             // 'pending', or 'expired' where the customer paid just after the hold lapsed: try to take the slot back.
             // If someone else booked it in the meantime the EXCLUDE constraint rejects this and we report slot_lost.
-            await booking.update({ status: "confirmed", expiresAt: null }, { transaction })
-            return { result: "confirmed" as ConfirmResult, booking }
+            await booking.update({ status: "confirmed", expiresAt: null, confirmedPaymentId: paymentId ?? null }, { transaction })
+            return { result: "confirmed" as const, booking }
         })
         if (result === "confirmed") {
             businessEvents.inc({ event: "booking_confirmed" })
             publish("booking.confirmed", { bookingId, userId: booking.userId, venueId: booking.venueId })
         }
-        return result
+        return { outcome: result, confirmedPaymentId: booking.confirmedPaymentId }
     } catch (err) {
-        if (err instanceof ExclusionConstraintError) return "slot_lost"
+        if (err instanceof ExclusionConstraintError) return { outcome: "slot_lost", confirmedPaymentId: null }
         throw err
     }
 }

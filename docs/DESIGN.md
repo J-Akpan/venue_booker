@@ -144,7 +144,7 @@ Overlapping active bookings are *impossible*, whatever the number of app instanc
 
 - **AuthN.** bcrypt (cost 12) with dummy-hash comparison so login timing doesn't reveal which accounts exist; short-lived (15 min) HS256 access JWTs with pinned algorithm + issuer; **rotating refresh tokens** stored hashed, with reuse detection (replaying an old token revokes the whole family); password change/reset revokes all sessions. Brute-force limits on login/reset; reset codes are 6-digit, single-use, 10-minute, HMAC-hashed at rest, max 5 attempts; `forgot-password` never reveals whether an email exists. *OAuth/social login: not implemented*; add via a provider (e.g., Google OIDC) if desired.
 - **AuthZ (RBAC + ownership).** Roles `User`, `Venue Owner`, `Admin` (support staff) and `Super Admin`, enforced per route. Super Admin alone manages staff and roles, and is the only role that can cancel-and-refund a booking to settle a dispute; Admin staff work the complaint/dispute queue on cases assigned to them. Role changes revoke the target's refresh tokens (their current access token lives up to 15 min) (`requireRole`). Ownership is enforced in services (only the owner or an Admin can edit/delete a venue; bookings visible only to the booker, venue owner, or Admin; other people's resource ids return `404`, not `403`). **Admin can't be self-assigned at signup.**
-- **Encryption.** In transit: terminate TLS at the ingress/LB (HSTS via helmet), `DB_SSL` for managed Postgres, `rediss://` for Redis. At rest: enable disk/volume encryption on Postgres, Redis and backups (infrastructure setting).
+- **Encryption.** In transit: terminate TLS at the ingress/LB (HSTS via helmet), use `DB_SSL` with certificate verification for Postgres (optionally set `DB_SSL_CA` for a private CA), and `rediss://` for Redis. At rest: enable disk/volume encryption on Postgres, Redis and backups (infrastructure setting).
 - **Input validation.** Joi on every body/query/param with `stripUnknown` (blocks mass assignment: clients can no longer send `role`, `status`, `totalPrice`); LIKE wildcards escaped in search; parameterised queries via the ORM; helmet security headers; CORS allow-list; body size limits.
 - **Webhook security.** Stripe signature + timestamp verified on the raw body; unsigned/forged events are rejected with `400`.
 - **Secrets management.** All config from environment, validated at boot (the app refuses to start without a ≥ 32-char `JWT_SECRET`). `.env` is git-ignored; `.env.example` documents variables; k8s manifests read a `Secret`; logs redact tokens and passwords. In production source secrets from a manager (AWS Secrets Manager, Vault, External Secrets).
@@ -154,7 +154,7 @@ Overlapping active bookings are *impossible*, whatever the number of app instanc
 ## 9. Observability
 
 - **Logging.** Structured JSON (pino), one line per request with `requestId`, secrets redacted. `X-Request-Id` is accepted from the LB or generated, returned to the client, included in every error body and every log line.
-- **Metrics.** Prometheus at `/metrics` (optionally token-protected; blocked at the nginx LB): request latency histogram by method/route/status, default Node metrics, cache hit/miss/error, business counters (`booking_created`, `payment_completed`, …), circuit-breaker state.
+- **Metrics.** Prometheus at `/metrics` (requires `METRICS_TOKEN` in production; the scraper sends it as a bearer token; blocked at the nginx LB): request latency histogram by method/route/status, default Node metrics, cache hit/miss/error, business counters (`booking_created`, `payment_completed`, …), circuit-breaker state.
 - **Tracing.** OpenTelemetry auto-instrumentation (http, express, pg, ioredis) enabled by setting `OTEL_EXPORTER_OTLP_ENDPOINT`; `traceId`/`spanId` are added to log lines.
 - **Alerting & dashboards** (suggested starting rules): 5xx rate > 1% for 5 min; p95 latency > 500 ms; `/health/ready` failing; `circuit_breaker_open == 1`; `cache_operations_total{result="error"}` rising; bookings stuck `pending` past expiry; failed BullMQ jobs > 0.
 - **Audit trail.** `audit_logs` records actor, action, entity, request id and IP for signups, logins, password changes, venue changes, bookings, cancellations, checkouts and payment webhooks.
@@ -168,7 +168,7 @@ Overlapping active bookings are *impossible*, whatever the number of app instanc
 
 ## Known gaps / next steps
 
-1. **Migrations.** Tables are created with `sequelize.sync()` (race-safe via an advisory lock, never `alter`). Before the first production schema change, adopt versioned migrations (umzug or sequelize-cli).
+1. **Migrations.** Tables and the current booking/payment constraints are created with `sequelize.sync()` plus reviewed idempotent SQL (race-safe via an advisory lock, never `alter`). Run `npm run db:init` before deploying schema changes. Before further production schema changes, adopt versioned migrations (umzug or sequelize-cli).
 2. **Integration tests** against a real Postgres (the double-booking and saga behaviour were verified manually end-to-end; unit tests cover pricing, slot rules, auth/RBAC and validation).
 3. Table partitioning for `bookings`/`audit_logs` when they reach tens of millions of rows.
 4. OAuth/social login, venue image upload (currently HTTPS URLs only), and a venue-owner payout flow (Stripe Connect) are product features, not yet built.

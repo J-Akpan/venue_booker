@@ -85,18 +85,22 @@ export const login = async (input: { username?: string; email?: string; password
 
 /** Rotate the refresh token. Re-use of an already-rotated token means it leaked: revoke the whole session set. */
 export const refresh = async (refreshToken: string) => {
-    return sequelize.transaction(async (transaction) => {
+    const tokens = await sequelize.transaction(async (transaction) => {
         const stored = await RefreshToken.findOne({ where: { tokenHash: sha256(refreshToken) }, transaction, lock: transaction.LOCK.UPDATE })
         if (!stored || stored.expiresAt < new Date()) throw unauthorized("Refresh token is invalid or expired")
         if (stored.revokedAt) {
             await revokeAllTokens(stored.userId, transaction)
-            throw unauthorized("Refresh token was already used")
+            // Return from the managed transaction so family revocation commits. Throwing here
+            // would roll the update back along with the transaction.
+            return null
         }
         const user = await User.findByPk(stored.userId, { transaction })
         if (!user) throw unauthorized()
         await stored.update({ revokedAt: new Date() }, { transaction })
         return issueTokens(user, { transaction })
     })
+    if (!tokens) throw unauthorized("Refresh token was already used")
+    return tokens
 }
 
 export const logout = async (refreshToken: string) => {
@@ -151,23 +155,30 @@ export const requestPasswordReset = async (email: string) => {
 
 export const resetPassword = async (email: string, otp: string, newPassword: string) => {
     const invalid = badRequest("Invalid or expired code")
-    const user = await User.scope("withSecrets").findOne({ where: { email: email.trim().toLowerCase() }, useMaster: true })
-    if (!user || !user.otpHash || !user.otpExpiry || user.otpExpiry < new Date() || user.otpAttempts >= OTP_MAX_ATTEMPTS) throw invalid
+    const accepted = await sequelize.transaction(async (transaction) => {
+        const user = await User.scope("withSecrets").findOne({
+            where: { email: email.trim().toLowerCase() },
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+            useMaster: true,
+        })
+        if (!user || !user.otpHash || !user.otpExpiry || user.otpExpiry < new Date() || user.otpAttempts >= OTP_MAX_ATTEMPTS) return false
 
-    const expected = Buffer.from(user.otpHash)
-    const actual = Buffer.from(hmac(`${user.userId}:${otp}`))
-    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
-        await user.increment("otpAttempts") // 6-digit codes are brute-forceable without an attempt cap
-        throw invalid
-    }
+        const expected = Buffer.from(user.otpHash)
+        const actual = Buffer.from(hmac(`${user.userId}:${otp}`))
+        if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+            await user.increment("otpAttempts", { transaction })
+            return false
+        }
 
-    await sequelize.transaction(async (transaction) => {
         await user.update(
             { password: await bcrypt.hash(newPassword, BCRYPT_COST), otpHash: null, otpExpiry: null, otpAttempts: 0 },
             { transaction },
-        ) // the code is single-use
+        ) // clear the code while holding the row lock, so it cannot be used twice concurrently
         await revokeAllTokens(user.userId, transaction)
+        return true
     })
+    if (!accepted) throw invalid
 }
 
 // ---- used by other modules (via ./index) ----------------------------------------------------

@@ -8,7 +8,7 @@ import { logger } from "./shared/logger"
 import { metricsMiddleware } from "./shared/metrics"
 import healthRoutes from "./shared/health"
 import { requestId } from "./shared/middleware/requestId"
-import { apiLimiter } from "./shared/middleware/rateLimit"
+import { apiLimiter, webhookLimiter } from "./shared/middleware/rateLimit"
 import { errorHandler, notFoundHandler } from "./shared/middleware/errorHandler"
 import { userRoutes, userAdminRoutes } from "./modules/users"
 import { supportRoutes, caseAdminRoutes } from "./modules/support"
@@ -33,7 +33,7 @@ export const createApp = () => {
     app.use(healthRoutes)
 
     // Stripe signs the exact bytes it sends, so this route must see the raw body, before express.json().
-    app.post("/api/v1/payments/webhook", express.raw({ type: "application/json", limit: "1mb" }), stripeWebhook)
+    app.post("/api/v1/payments/webhook", webhookLimiter, express.raw({ type: "application/json", limit: "1mb" }), stripeWebhook)
 
     app.use(express.json({ limit: "100kb" }))
 

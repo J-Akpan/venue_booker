@@ -16,7 +16,7 @@ npm run dev                     # DB_SYNC=true creates tables on boot
 Production-like stack (nginx load balancer → 2 app replicas → Postgres + Redis):
 
 ```bash
-DB_PASSWORD=... JWT_SECRET=... docker compose up --build     # http://localhost:8080
+DB_PASSWORD=... JWT_SECRET=... METRICS_TOKEN=... docker compose up --build     # http://localhost:8080
 ```
 
 Create the Super Admin (no HTTP endpoint exists for this on purpose):

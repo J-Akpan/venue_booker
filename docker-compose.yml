@@ -15,9 +15,11 @@ x-app: &app
     DB_NAME: venue_booker
     DB_USER: venue
     DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    DB_SSL: "false"           # local Postgres service does not use TLS
     DB_SYNC: "true"            # creates missing tables on first boot; idempotent
     REDIS_URL: redis://redis:6379
     JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+    METRICS_TOKEN: ${METRICS_TOKEN:?set METRICS_TOKEN in .env}
     STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
     STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     EMAIL_USER: ${EMAIL_USER:-}

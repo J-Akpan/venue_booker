@@ -17,7 +17,9 @@ export const sequelize = new Sequelize(env.db.name, env.db.user, env.db.password
     dialectOptions: {
         statement_timeout: 10_000,
         idle_in_transaction_session_timeout: 15_000,
-        ...(env.db.ssl ? { ssl: { rejectUnauthorized: false } } : {}),
+        ...(env.db.ssl
+            ? { ssl: { rejectUnauthorized: true, ...(env.db.sslCa ? { ca: env.db.sslCa } : {}) } }
+            : {}),
     },
     retry: { max: 3, match: [/ECONNRESET/, /ETIMEDOUT/, /ECONNREFUSED/, /SequelizeConnectionError/] },
     benchmark: true,
@@ -44,6 +46,40 @@ export const applyDatabaseConstraints = async () => {
                 ALTER TABLE bookings ADD CONSTRAINT bookings_valid_range CHECK ("endsAt" > "startsAt");
             END IF;
         END $$;`)
+
+    // Keep one active checkout per booking. Preserve existing payment rows while demoting
+    // duplicate pending attempts; a late success from those Stripe sessions is still handled
+    // by the webhook and compensated if another payment has already confirmed the booking.
+    await sequelize.query(`
+        WITH ranked AS (
+            SELECT "paymentId",
+                   ROW_NUMBER() OVER (PARTITION BY "bookingId" ORDER BY "createdAt" DESC, "paymentId" DESC) AS position
+            FROM payments
+            WHERE status = 'Pending'
+        )
+        UPDATE payments AS p
+        SET status = 'Failed'
+        FROM ranked
+        WHERE p."paymentId" = ranked."paymentId" AND ranked.position > 1;
+    `)
+    await sequelize.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS payments_one_pending_per_booking
+        ON payments ("bookingId")
+        WHERE status = 'Pending';
+    `)
+    await sequelize.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "confirmedPaymentId" UUID;`)
+    // Backfill the best available confirmation link for bookings created before this column existed.
+    await sequelize.query(`
+        UPDATE bookings AS b
+        SET "confirmedPaymentId" = (
+            SELECT p."paymentId"
+            FROM payments AS p
+            WHERE p."bookingId" = b."bookingId" AND p.status = 'Completed'
+            ORDER BY p."paidAt" ASC NULLS LAST, p."createdAt" ASC
+            LIMIT 1
+        )
+        WHERE b.status = 'confirmed' AND b."confirmedPaymentId" IS NULL;
+    `)
 }
 
 export const pingDatabase = async () => {

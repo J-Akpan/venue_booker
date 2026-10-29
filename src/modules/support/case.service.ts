@@ -1,4 +1,4 @@
-import { WhereOptions } from "sequelize"
+import { Op, WhereOptions } from "sequelize"
 import { sequelize } from "../../config/database"
 import { badRequest, conflict, forbidden, notFound } from "../../shared/errors"
 import { publish } from "../../shared/events"
@@ -25,25 +25,39 @@ export const createCase = async (
         // Only the two parties to a booking may raise a case about it. 404 so ids can't be probed.
         if (!booking || (booking.userId !== user.userId && !(await isVenueOwner(booking.venueId, user.userId)))) throw notFound("Booking")
         venueId = booking.venueId
-
-        const duplicate = await SupportCase.findOne({
-            where: { raisedBy: user.userId, bookingId: input.bookingId, type: input.type, status: OPEN },
-            useMaster: true,
-        })
-        if (duplicate) throw conflict(`You already have an open ${input.type} for this booking`)
     }
 
-    return SupportCase.create({
-        type: input.type,
-        raisedBy: user.userId,
-        bookingId: input.bookingId ?? null,
-        venueId,
-        subject: input.subject,
-        description: input.description,
-        assignedTo: null,
-        resolution: null,
-        resolvedBy: null,
-        resolvedAt: null,
+    return sequelize.transaction(async (transaction) => {
+        if (input.bookingId) {
+            // Serialize submissions for this booking/actor/type across all app instances.
+            // A database advisory lock avoids a check-then-insert race without rewriting old cases.
+            const lockKey = `${user.userId}:${input.bookingId}:${input.type}`
+            await sequelize.query("SELECT pg_advisory_xact_lock(hashtext(:key), hashtext('support-case'))", {
+                replacements: { key: lockKey },
+                transaction,
+            })
+            const duplicate = await SupportCase.findOne({
+                where: { raisedBy: user.userId, bookingId: input.bookingId, type: input.type, status: { [Op.in]: OPEN } },
+                transaction,
+            })
+            if (duplicate) throw conflict(`You already have an open ${input.type} for this booking`)
+        }
+
+        return SupportCase.create(
+            {
+                type: input.type,
+                raisedBy: user.userId,
+                bookingId: input.bookingId ?? null,
+                venueId,
+                subject: input.subject,
+                description: input.description,
+                assignedTo: null,
+                resolution: null,
+                resolvedBy: null,
+                resolvedAt: null,
+            },
+            { transaction },
+        )
     })
 }
 
@@ -111,7 +125,7 @@ export const resolveCase = async (
             if (!found.bookingId) throw badRequest("This case has no booking to cancel")
             // Idempotent: cancelling an already-cancelled booking is a no-op. Publishes booking.cancelled,
             // which the payments module turns into a refund job when money was taken.
-            await cancelBooking(found.bookingId, actor)
+            await cancelBooking(found.bookingId, actor, transaction)
         }
         await found.update(
             {

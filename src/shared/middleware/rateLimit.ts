@@ -63,6 +63,9 @@ const make = (prefix: string, windowMs: number, limit: number) =>
 /** Default for the whole API. */
 export const apiLimiter = make("api", 60_000, 300)
 
+/** Dedicated limit for the raw-body Stripe endpoint, which is mounted before the API router. */
+export const webhookLimiter = make("stripe-webhook", 60_000, 300)
+
 /** Brute-force protection for credential endpoints (login, signup, OTP). */
 export const authLimiter = make("auth", 15 * 60_000, 20)
 

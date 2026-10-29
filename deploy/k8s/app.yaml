@@ -1,6 +1,8 @@
-# Rolling-update deployment. Apply with: kubectl apply -f deploy/k8s/
-# Secrets (DB_PASSWORD, JWT_SECRET, STRIPE_*, EMAIL_PASS) come from a Secret named venue-booker-secrets;
+# Rolling-update deployment. Run `npm run db:init` against the target database before deploying schema changes.
+# Then apply with: kubectl apply -f deploy/k8s/
+# Secrets (DB_PASSWORD, JWT_SECRET, METRICS_TOKEN, STRIPE_*, EMAIL_PASS, and optional DB_SSL_CA) come from a Secret named venue-booker-secrets;
 # create it from your secret manager (External Secrets / Sealed Secrets / `kubectl create secret`), never from git.
+# Configure Prometheus to send `Authorization: Bearer <METRICS_TOKEN>`; scrape annotations do not add the token.
 apiVersion: v1
 kind: ConfigMap
 metadata: { name: venue-booker-config }
@@ -11,6 +13,7 @@ data:
   DB_REPLICA_HOST: postgres-replica
   DB_NAME: venue_booker
   DB_USER: venue
+  DB_SSL: "true"
   REDIS_URL: redis://redis:6379
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 ---

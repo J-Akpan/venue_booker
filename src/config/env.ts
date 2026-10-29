@@ -26,7 +26,8 @@ const schema = Joi.object({
     DB_PORT: Joi.number().port().default(5432),
     DB_REPLICA_HOST: Joi.string().allow("").default(""),
     DB_POOL_MAX: Joi.number().integer().min(1).default(10),
-    DB_SSL: Joi.boolean().default(false),
+    DB_SSL: Joi.boolean().default(process.env.NODE_ENV === "production"),
+    DB_SSL_CA: Joi.string().allow("").default(""),
     // Creates missing tables on boot. On by default outside production; in production run `npm run db:init` or set it explicitly.
     DB_SYNC: Joi.boolean().default(process.env.NODE_ENV !== "production"),
 
@@ -53,7 +54,11 @@ const schema = Joi.object({
     EMAIL_PASS: Joi.string().allow("").default(""),
 
     // Observability
-    METRICS_TOKEN: Joi.string().allow("").default(""),
+    METRICS_TOKEN: Joi.when("NODE_ENV", {
+        is: "production",
+        then: Joi.string().min(32).required(),
+        otherwise: Joi.string().allow("").default(""),
+    }),
     OTEL_EXPORTER_OTLP_ENDPOINT: Joi.string().allow("").default(""),
 }).unknown(true)
 
@@ -81,6 +86,7 @@ export const env = {
         replicaHost: value.DB_REPLICA_HOST as string,
         poolMax: value.DB_POOL_MAX as number,
         ssl: value.DB_SSL as boolean,
+        sslCa: value.DB_SSL_CA as string,
         sync: value.DB_SYNC as boolean,
     },
     redisUrl: value.REDIS_URL as string,
