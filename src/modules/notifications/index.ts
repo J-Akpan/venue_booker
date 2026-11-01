@@ -98,7 +98,7 @@ export const initNotifications = () => {
         const venue = await getVenueForBooking(venueId)
         const owner = await getContact(venue.ownerId)
         if (owner) {
-            const message = `Booking request ${bookingId} is waiting for your response.`
+            const message = `Booking request ${bookingId} is waiting for your response. Sign in as the venue owner to accept or decline it.`
             await queueEmail({ to: owner.email, subject: "New venue booking request", text: `Hi ${owner.name}, ${message}` })
             await queueWhatsApp(owner, message)
         }
