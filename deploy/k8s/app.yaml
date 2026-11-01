@@ -13,6 +13,7 @@ data:
   DB_REPLICA_HOST: postgres-replica
   DB_NAME: venue_booker
   DB_USER: venue
+  DB_POOL_MAX: "3"
   DB_SSL: "true"
   REDIS_URL: redis://redis:6379
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318

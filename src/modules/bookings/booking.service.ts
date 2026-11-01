@@ -8,7 +8,7 @@ import { PageQuery, toOffset } from "../../shared/pagination"
 import { isStaff, type AuthUser } from "../../shared/middleware/auth"
 import { getVenueForBooking, getVenueSummaries, isVenueOwner } from "../venues"
 import { assertValidSlot, calculateTotal } from "./booking.pricing"
-import { Booking } from "./booking.model"
+import { Booking, type BookingPriceBreakdown } from "./booking.model"
 
 const present = (b: Booking) => {
     const { confirmedPaymentId: _confirmedPaymentId, ...data } = b.toJSON()
@@ -22,7 +22,7 @@ const present = (b: Booking) => {
  */
 export const createBooking = async (
     userId: string,
-    input: { venueId: string; startsAt: Date; endsAt: Date },
+    input: { venueId: string; startsAt: Date; endsAt: Date; eventType?: string; attendeeCount?: number },
     idempotencyKey: string | null,
 ) => {
     // Idempotent retry: same key => same booking, no duplicate and no error.
@@ -31,9 +31,7 @@ export const createBooking = async (
         if (existing) return { booking: present(existing), replayed: true }
     }
 
-    assertValidSlot(input.startsAt, input.endsAt)
-    const venue = await getVenueForBooking(input.venueId)
-    const totalPrice = calculateTotal(input.startsAt, input.endsAt, venue.pricePerHour)
+    const quote = await quoteBooking(input)
 
     try {
         const booking = await sequelize.transaction(async (transaction) => {
@@ -49,8 +47,12 @@ export const createBooking = async (
                     venueId: input.venueId,
                     startsAt: input.startsAt,
                     endsAt: input.endsAt,
-                    totalPrice: totalPrice.toFixed(2),
-                    currency: venue.currency,
+                    totalPrice: quote.priceBreakdown.amountDueNow.toFixed(2),
+                    currency: quote.priceBreakdown.currency,
+                    eventType: input.eventType ?? null,
+                    attendeeCount: input.attendeeCount ?? null,
+                    priceBreakdown: quote.priceBreakdown,
+                    cancellationPolicySnapshot: quote.cancellationPolicy,
                     status: "pending",
                     expiresAt: new Date(Date.now() + env.bookingHoldMinutes * 60_000),
                     idempotencyKey,
@@ -71,6 +73,47 @@ export const createBooking = async (
         }
         throw err
     }
+}
+
+export const quoteBooking = async (input: { venueId: string; startsAt: Date; endsAt: Date; eventType?: string; attendeeCount?: number }) => {
+    assertValidSlot(input.startsAt, input.endsAt)
+    const venue = await getVenueForBooking(input.venueId)
+    if (input.attendeeCount !== undefined && input.attendeeCount > venue.capacity) {
+        throw badRequest(`This venue supports up to ${venue.capacity} attendees`)
+    }
+    if (input.eventType && venue.eventTypes.length > 0 && !venue.eventTypes.some((type) => type.toLowerCase() === input.eventType!.toLowerCase())) {
+        throw badRequest("This venue is not listed for that event type")
+    }
+    const venueRental = calculateTotal(input.startsAt, input.endsAt, venue.pricePerHour)
+    const priceBreakdown: BookingPriceBreakdown = {
+        venueRental,
+        cleaningFee: venue.cleaningFee,
+        amountDueNow: Math.round((venueRental + venue.cleaningFee) * 100) / 100,
+        refundableDepositDueToVenue: venue.refundableDeposit,
+        overtimePricePerHour: venue.overtimePricePerHour,
+        currency: venue.currency,
+    }
+    return { venueId: venue.venueId, startsAt: input.startsAt, endsAt: input.endsAt, priceBreakdown, cancellationPolicy: venue.cancellationPolicy }
+}
+
+/** Busy intervals for public date picking. Pending holds are visible only until their hold expires. */
+export const getPublicAvailability = async (venueId: string, from: Date, to: Date) => {
+    await getVenueForBooking(venueId) // also returns 404 for an unknown venue
+    const rows = await Booking.findAll({
+        where: {
+            venueId,
+            startsAt: { [Op.lt]: to },
+            endsAt: { [Op.gt]: from },
+            [Op.or]: [
+                { status: "confirmed" },
+                { status: "pending", expiresAt: { [Op.gt]: new Date() } },
+            ],
+        },
+        attributes: ["startsAt", "endsAt", "status"],
+        order: [["startsAt", "ASC"]],
+        useMaster: true,
+    })
+    return rows.map((row) => ({ startsAt: row.startsAt, endsAt: row.endsAt, status: row.status }))
 }
 
 const withVenues = async (bookings: Booking[]) => {
@@ -167,9 +210,20 @@ export const confirmBooking = async (bookingId: string, paymentId?: string): Pro
     }
 }
 
-/** Release slots whose payment window lapsed. Safe to run on every instance: the UPDATE is idempotent. */
+/** Release expired holds from one instance at a time, even when the API is horizontally scaled. */
 export const expireStaleHolds = async () => {
-    const [count] = await Booking.update({ status: "expired" }, { where: { status: "pending", expiresAt: { [Op.lt]: new Date() } } })
+    const count = await sequelize.transaction(async (transaction) => {
+        const [lockRows] = await sequelize.query(
+            "SELECT pg_try_advisory_xact_lock(7426002) AS locked",
+            { transaction },
+        )
+        if (!(lockRows as Array<{ locked: boolean }>)[0]?.locked) return 0
+        const [updated] = await Booking.update(
+            { status: "expired" },
+            { where: { status: "pending", expiresAt: { [Op.lt]: new Date() } }, transaction },
+        )
+        return updated
+    })
     if (count) businessEvents.inc({ event: "booking_expired" }, count)
     return count
 }

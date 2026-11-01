@@ -3,6 +3,15 @@ import { sequelize } from "../../config/database"
 
 export type BookingStatus = "pending" | "confirmed" | "cancelled" | "expired"
 
+export interface BookingPriceBreakdown {
+    venueRental: number
+    cleaningFee: number
+    amountDueNow: number
+    refundableDepositDueToVenue: number
+    overtimePricePerHour: number
+    currency: string
+}
+
 export class Booking extends Model<InferAttributes<Booking>, InferCreationAttributes<Booking>> {
     declare bookingId: CreationOptional<string>
     declare userId: string
@@ -11,6 +20,10 @@ export class Booking extends Model<InferAttributes<Booking>, InferCreationAttrib
     declare endsAt: Date
     declare totalPrice: string
     declare currency: string
+    declare eventType: string | null
+    declare attendeeCount: number | null
+    declare priceBreakdown: CreationOptional<BookingPriceBreakdown>
+    declare cancellationPolicySnapshot: string | null
     declare status: CreationOptional<BookingStatus>
     declare expiresAt: Date | null // end of the unpaid hold on the slot
     declare confirmedPaymentId: CreationOptional<string | null>
@@ -29,6 +42,10 @@ Booking.init(
         endsAt: { type: DataTypes.DATE, allowNull: false },
         totalPrice: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
         currency: { type: DataTypes.STRING(3), allowNull: false },
+        eventType: { type: DataTypes.STRING(80), allowNull: true },
+        attendeeCount: { type: DataTypes.INTEGER, allowNull: true, validate: { min: 1 } },
+        priceBreakdown: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+        cancellationPolicySnapshot: { type: DataTypes.TEXT, allowNull: true },
         status: { type: DataTypes.ENUM("pending", "confirmed", "cancelled", "expired"), allowNull: false, defaultValue: "pending" },
         expiresAt: { type: DataTypes.DATE, allowNull: true },
         confirmedPaymentId: { type: DataTypes.UUID, allowNull: true, defaultValue: null },

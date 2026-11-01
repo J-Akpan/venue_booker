@@ -4,10 +4,12 @@ import { logger } from "./logger"
 
 const inflight = new Map<string, Promise<unknown>>()
 
-const versionOf = async (namespace: string): Promise<string> => {
-    const v = await redis!.get(`cache:${namespace}:v`)
-    return v ?? "0"
-}
+// Read namespace version and cached value atomically in one Redis round trip.
+const CACHE_READ_SCRIPT = `
+    local version = redis.call('GET', KEYS[1]) or '0'
+    local value = redis.call('GET', ARGV[1] .. version .. ':' .. ARGV[2])
+    return { version, value }
+`
 
 /**
  * Cache-aside with:
@@ -20,8 +22,14 @@ export const cached = async <T>(namespace: string, key: string, ttlSeconds: numb
 
     let fullKey: string
     try {
-        fullKey = `cache:${namespace}:${await versionOf(namespace)}:${key}`
-        const hit = await redis.get(fullKey)
+        const [version, hit] = await redis.eval(
+            CACHE_READ_SCRIPT,
+            1,
+            `cache:${namespace}:v`,
+            `cache:${namespace}:`,
+            key,
+        ) as [string, string | null]
+        fullKey = `cache:${namespace}:${version}:${key}`
         if (hit !== null) {
             cacheOps.inc({ result: "hit" })
             return JSON.parse(hit) as T

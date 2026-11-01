@@ -15,6 +15,7 @@ import { supportRoutes, caseAdminRoutes } from "./modules/support"
 import { venueRoutes } from "./modules/venues"
 import { bookingRoutes } from "./modules/bookings"
 import { paymentRoutes, stripeWebhook } from "./modules/payments"
+import { reviewRoutes } from "./modules/reviews"
 
 export const createApp = () => {
     const app = express()
@@ -41,6 +42,7 @@ export const createApp = () => {
     api.use(apiLimiter)
     api.use("/users", userRoutes)
     api.use("/venues", venueRoutes)
+    api.use("/reviews", reviewRoutes)
     api.use("/bookings", bookingRoutes)
     api.use("/payments", paymentRoutes)
     api.use("/support", supportRoutes)

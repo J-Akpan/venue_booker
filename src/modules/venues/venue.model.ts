@@ -10,8 +10,17 @@ export class Venue extends Model<InferAttributes<Venue>, InferCreationAttributes
     declare capacity: number
     declare pricePerHour: string // DECIMAL is returned as a string by pg to avoid float rounding
     declare currency: CreationOptional<string>
+    declare cleaningFee: CreationOptional<string>
+    declare refundableDeposit: CreationOptional<string>
+    declare overtimePricePerHour: CreationOptional<string>
     declare contact: string
     declare pictures: CreationOptional<string[]>
+    declare eventTypes: CreationOptional<string[]>
+    declare amenities: CreationOptional<string[]>
+    declare cancellationPolicy: CreationOptional<string | null>
+    declare isVerified: CreationOptional<boolean>
+    declare verifiedAt: CreationOptional<Date | null>
+    declare availabilityConfirmedAt: CreationOptional<Date | null>
     declare readonly createdAt: CreationOptional<Date>
     declare readonly updatedAt: CreationOptional<Date>
     declare readonly deletedAt: CreationOptional<Date | null>
@@ -26,9 +35,18 @@ Venue.init(
         location: { type: DataTypes.STRING(160), allowNull: false },
         capacity: { type: DataTypes.INTEGER, allowNull: false, validate: { min: 1 } },
         pricePerHour: { type: DataTypes.DECIMAL(10, 2), allowNull: false, validate: { min: 0 } },
-        currency: { type: DataTypes.STRING(3), allowNull: false, defaultValue: "USD" },
+        currency: { type: DataTypes.STRING(3), allowNull: false, defaultValue: "NGN" },
+        cleaningFee: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0, validate: { min: 0 } },
+        refundableDeposit: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0, validate: { min: 0 } },
+        overtimePricePerHour: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0, validate: { min: 0 } },
         contact: { type: DataTypes.STRING(64), allowNull: false },
         pictures: { type: DataTypes.ARRAY(DataTypes.TEXT), allowNull: false, defaultValue: [] },
+        eventTypes: { type: DataTypes.ARRAY(DataTypes.STRING(60)), allowNull: false, defaultValue: [] },
+        amenities: { type: DataTypes.ARRAY(DataTypes.STRING(60)), allowNull: false, defaultValue: [] },
+        cancellationPolicy: { type: DataTypes.TEXT, allowNull: true },
+        isVerified: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+        verifiedAt: { type: DataTypes.DATE, allowNull: true },
+        availabilityConfirmedAt: { type: DataTypes.DATE, allowNull: true },
         createdAt: DataTypes.DATE,
         updatedAt: DataTypes.DATE,
         deletedAt: DataTypes.DATE,

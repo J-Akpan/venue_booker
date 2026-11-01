@@ -25,7 +25,7 @@ const schema = Joi.object({
     DB_HOST: Joi.string().default("localhost"),
     DB_PORT: Joi.number().port().default(5432),
     DB_REPLICA_HOST: Joi.string().allow("").default(""),
-    DB_POOL_MAX: Joi.number().integer().min(1).default(10),
+    DB_POOL_MAX: Joi.number().integer().min(1).default(3),
     DB_SSL: Joi.boolean().default(process.env.NODE_ENV === "production"),
     DB_SSL_CA: Joi.string().allow("").default(""),
     // Creates missing tables on boot. On by default outside production; in production run `npm run db:init` or set it explicitly.

@@ -36,6 +36,20 @@ export const update = async (req: Request, res: Response) => {
     res.json({ venue })
 }
 
+export const confirmAvailability = async (req: Request, res: Response) => {
+    const venueId = String(req.params.venueId)
+    const venue = await venues.confirmVenueAvailability(venueId, req.user!)
+    await audit(req, { action: "venue.availability_confirm", entity: "venue", entityId: venueId })
+    res.json({ venue })
+}
+
+export const setVerification = async (req: Request, res: Response) => {
+    const venueId = String(req.params.venueId)
+    const venue = await venues.setVenueVerification(venueId, req.user!, req.body.verified)
+    await audit(req, { action: req.body.verified ? "venue.verify" : "venue.unverify", entity: "venue", entityId: venueId })
+    res.json({ venue })
+}
+
 export const remove = async (req: Request, res: Response) => {
     const venueId = String(req.params.venueId)
     await venues.deleteVenue(venueId, req.user!)

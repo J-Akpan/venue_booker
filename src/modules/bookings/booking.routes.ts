@@ -5,6 +5,11 @@ import * as c from "./booking.controller"
 import * as v from "./booking.validation"
 
 const router = Router()
+
+// Public date picker data; must stay fresh and includes active payment holds.
+router.get("/availability", validate(v.availabilityQuerySchema, "query"), c.availability)
+router.get("/quote", validate(v.quoteBookingSchema, "query"), c.quote)
+
 router.use(authenticate)
 
 router.post("/", validate(v.createBookingSchema), c.create)

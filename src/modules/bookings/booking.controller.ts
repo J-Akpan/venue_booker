@@ -19,6 +19,19 @@ export const create = async (req: Request, res: Response) => {
     res.status(replayed ? 200 : 201).location(`/api/v1/bookings/${booking.bookingId}`).json({ booking })
 }
 
+export const availability = async (req: Request, res: Response) => {
+    const { venueId, from, to } = req.query as unknown as { venueId: string; from: Date; to: Date }
+    res.set("Cache-Control", "private, no-store")
+    const busySlots = await bookings.getPublicAvailability(venueId, from, to)
+    res.json({ venueId, from, to, busySlots })
+}
+
+export const quote = async (req: Request, res: Response) => {
+    const input = req.query as unknown as { venueId: string; startsAt: Date; endsAt: Date; eventType?: string; attendeeCount?: number }
+    res.set("Cache-Control", "private, no-store")
+    res.json({ quote: await bookings.quoteBooking(input) })
+}
+
 export const mine = async (req: Request, res: Response) => {
     const page = req.query as unknown as PageQuery
     const { rows, total } = await bookings.listUserBookings(req.user!.userId, page)

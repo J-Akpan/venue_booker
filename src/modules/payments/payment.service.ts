@@ -78,7 +78,8 @@ export const startCheckout = async (userId: string, bookingId: string) => {
         const session = await createCheckoutSession(
             {
                 mode: "payment",
-                payment_method_types: ["card"],
+                // Let Stripe Checkout dynamically show payment methods enabled for this account,
+                // currency and customer location (including compatible local methods).
                 ...(contact ? { customer_email: contact.email } : {}),
                 client_reference_id: payment.paymentId,
                 metadata: { paymentId: payment.paymentId, bookingId },
@@ -149,6 +150,14 @@ export const handleWebhookEvent = async (event: Stripe.Event) => {
             return onPaid(session)
         }
         case "checkout.session.expired": {
+            const session = event.data.object as Stripe.Checkout.Session
+            return onExpired(session)
+        }
+        case "checkout.session.async_payment_succeeded": {
+            const session = event.data.object as Stripe.Checkout.Session
+            return onPaid(session)
+        }
+        case "checkout.session.async_payment_failed": {
             const session = event.data.object as Stripe.Checkout.Session
             return onExpired(session)
         }

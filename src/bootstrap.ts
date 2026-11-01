@@ -6,6 +6,7 @@ import { initPayments } from "./modules/payments"
 import { expireStaleHolds } from "./modules/bookings"
 import "./modules/audit"
 import "./modules/support"
+import "./modules/reviews/review.model"
 
 const SCHEMA_LOCK_ID = 7_426_001 // arbitrary app-wide constant
 

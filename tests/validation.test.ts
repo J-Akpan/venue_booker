@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { signupSchema, resetPasswordSchema } from "../src/modules/users/user.validation"
 import { createBookingSchema } from "../src/modules/bookings/booking.validation"
+import { paginationSchema } from "../src/shared/pagination"
 
 describe("signupSchema", () => {
     const ok = { username: "alice1", email: "a@b.co", password: "Passw0rd!x" }
@@ -33,5 +34,14 @@ describe("resetPasswordSchema", () => {
         expect(resetPasswordSchema.validate({ ...base, otp: "123456" }).error).toBeUndefined()
         expect(resetPasswordSchema.validate({ ...base, otp: "12ab56" }).error).toBeDefined()
         expect(resetPasswordSchema.validate({ ...base, otp: "123456", confirmPassword: "different1!" }).error).toBeDefined()
+    })
+})
+
+describe("paginationSchema", () => {
+    const schema = Joi.object(paginationSchema)
+
+    it("allows bounded pages and rejects deep offsets", () => {
+        expect(schema.validate({ page: 100, limit: 100 }).error).toBeUndefined()
+        expect(schema.validate({ page: 101, limit: 20 }).error).toBeDefined()
     })
 })

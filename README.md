@@ -38,17 +38,23 @@ Errors always look like `{ "error": { "code", "message", "details?", "requestId"
 | `POST /users/forgot-password` · `/reset-password` | public | emailed 6-digit code |
 | `GET·PATCH /users/me` · `PUT /users/me/password` | signed in | |
 | `GET /users` | Admin | paginated |
-| `GET /venues` | public | `q, location, minCapacity, maxPrice, sort, page, limit` (cached) |
+| `GET /venues` | public | `q, location, minCapacity, maxPrice, eventType, amenities, verifiedOnly, sort, page, limit` (cached) |
 | `GET /venues/:id` | public | |
-| `POST /venues` · `PATCH·DELETE /venues/:id` | Venue Owner (own venues) | |
+| `POST /venues` · `PATCH·DELETE /venues/:id` | Venue Owner (own venues) | Includes amenities, event types, cleaning fee, refundable deposit, overtime rate and cancellation policy |
+| `POST /venues/:id/availability-confirmation` | Venue Owner (own venues) | Publicly records when availability was last checked |
+| `POST /venues/:id/verification` | Admin | `{ verified: boolean }`; verification changes are audit-logged |
 | `GET /venues/mine` | Venue Owner | |
-| `POST /bookings` | signed in | `{ venueId, startsAt, endsAt }`; header `Idempotency-Key`; price is computed server-side; creates a **pending hold** |
+| `GET /bookings/availability` | public | `venueId, from, to` (ISO dates); returns confirmed bookings and active holds, never cached |
+| `GET /bookings/quote` | public | `venueId, startsAt, endsAt, eventType?, attendeeCount?`; returns itemized due-now price and venue terms |
+| `POST /bookings` | signed in | `{ venueId, startsAt, endsAt, eventType?, attendeeCount? }`; header `Idempotency-Key`; price is computed server-side and snapshotted; creates a **pending hold** |
 | `GET /bookings` · `GET /bookings/:id` | booker (or venue owner / Admin) | |
 | `GET /bookings/venue/:venueId` | Venue Owner | bookings on a venue |
 | `POST /bookings/:id/cancel` | booker / venue owner / Admin | refunds if paid |
-| `POST /payments/checkout` | booker | `{ bookingId }` → Stripe Checkout `url` |
+| `POST /payments/checkout` | booker | `{ bookingId }` → Stripe Checkout `url`; Checkout chooses among methods enabled for the Stripe account and booking currency |
 | `GET /payments/booking/:bookingId` | booker | |
 | `POST /payments/webhook` | Stripe | signature-verified; point Stripe at it |
+| `GET /reviews/venues/:venueId` | public | Paginated reviews and rating summary |
+| `POST /reviews` | signed in | `{ bookingId, rating, comment? }`; one review per confirmed booking, after the event ends |
 | `POST·GET /support/cases` · `GET /support/cases/:id` | booker / venue owner | raise a `complaint` or a `dispute` (needs `bookingId`, caller must be a party to it); follow your own cases |
 | `GET /admin/cases` · `GET /admin/cases/:id` | Admin, Super Admin | queue; filters `status, type, assignedTo, unassigned` (oldest first) |
 | `POST /admin/cases/:id/assign` | Admin (self), Super Admin (anyone) | |
@@ -57,7 +63,7 @@ Errors always look like `{ "error": { "code", "message", "details?", "requestId"
 | `PUT /admin/users/:userId/role` | Super Admin | `User`, `Venue Owner` or `Admin`; not yourself, not another Super Admin |
 | `GET /health/live` · `/health/ready` · `/metrics` | ops | outside `/api` |
 
-Typical flow: signup → login → `POST /bookings` (slot held 15 min) → `POST /payments/checkout` → pay on Stripe → webhook confirms the booking.
+Typical flow: browse a venue → check `GET /bookings/availability` → request `GET /bookings/quote` → signup/login → `POST /bookings` (slot held 15 min) → `POST /payments/checkout` → pay on Stripe → webhook confirms the booking. Enable the payment methods you want in Stripe Dashboard; the webhook handles delayed payment success and failure events too. Booking responses include a price breakdown; cleaning fees are included in the online amount, while refundable deposits due to the venue are shown separately. Cancellation terms are copied onto the booking so later venue edits do not rewrite existing bookings.
 
 ## Breaking changes from the previous version
 

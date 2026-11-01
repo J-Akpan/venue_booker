@@ -16,6 +16,8 @@ router.get("/mine", authenticate, requireRole("Venue Owner"), validate(pageSchem
 router.get("/:venueId", validate(v.venueIdSchema, "params"), c.get)
 router.post("/", authenticate, requireRole("Venue Owner"), validate(v.createVenueSchema), c.create)
 router.patch("/:venueId", authenticate, requireRole("Venue Owner"), validate(v.venueIdSchema, "params"), validate(v.updateVenueSchema), c.update)
+router.post("/:venueId/availability-confirmation", authenticate, requireRole("Venue Owner"), validate(v.venueIdSchema, "params"), c.confirmAvailability)
+router.post("/:venueId/verification", authenticate, requireRole("Admin"), validate(v.venueIdSchema, "params"), validate(v.setVenueVerificationSchema), c.setVerification)
 router.delete("/:venueId", authenticate, requireRole("Venue Owner"), validate(v.venueIdSchema, "params"), c.remove)
 
 export default router
