@@ -16,6 +16,7 @@ import { venueRoutes } from "./modules/venues"
 import { bookingRoutes } from "./modules/bookings"
 import { paymentRoutes, stripeWebhook } from "./modules/payments"
 import { reviewRoutes } from "./modules/reviews"
+import privacyRoutes from "./modules/users/privacy.routes"
 
 export const createApp = () => {
     const app = express()
@@ -24,7 +25,12 @@ export const createApp = () => {
     app.set("trust proxy", env.trustProxy) // number of reverse proxies in front (LB, ingress): makes req.ip and rate limiting correct
 
     app.use(requestId)
-    app.use(pinoHttp({ logger, genReqId: (req) => (req as express.Request).id, autoLogging: { ignore: (req) => req.url?.startsWith("/health") ?? false } }))
+    app.use(pinoHttp({
+        logger,
+        genReqId: (req) => (req as express.Request).id,
+        serializers: { req: (req: any) => ({ id: req.id, method: req.method, url: String(req.url ?? "").split("?")[0], remoteAddress: req.remoteAddress }) },
+        autoLogging: { ignore: (req) => req.url?.startsWith("/health") ?? false },
+    }))
     app.use(helmet())
     app.use(cors({ origin: env.corsOrigins.length ? env.corsOrigins : false, credentials: true, maxAge: 600 }))
     app.use(compression())
@@ -47,6 +53,7 @@ export const createApp = () => {
     api.use("/payments", paymentRoutes)
     api.use("/support", supportRoutes)
     api.use("/admin/cases", caseAdminRoutes)
+    api.use("/admin/privacy", privacyRoutes)
     api.use("/admin", userAdminRoutes)
     app.use("/api/v1", api)
 

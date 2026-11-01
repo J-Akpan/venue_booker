@@ -26,6 +26,8 @@ export const toPublicUser = (u: User) => ({
     firstname: u.firstname,
     lastname: u.lastname,
     contact: u.contact,
+    whatsappOptIn: u.whatsappOptIn,
+    whatsappOptInAt: u.whatsappOptInAt,
     address: u.address,
     gender: u.gender,
     createdAt: u.createdAt,
@@ -78,7 +80,7 @@ export const login = async (input: { username?: string; email?: string; password
     const where = input.email ? { email: input.email.trim().toLowerCase() } : { username: input.username! }
     const user = await User.scope("withSecrets").findOne({ where, useMaster: true })
     const valid = await bcrypt.compare(input.password, user?.password ?? DUMMY_HASH)
-    if (!user || !valid) throw unauthorized("Invalid credentials")
+    if (!user || !valid || user.privacyDeletedAt) throw unauthorized("Invalid credentials")
 
     return { user: toPublicUser(user), ...(await issueTokens(user)) }
 }
@@ -95,7 +97,7 @@ export const refresh = async (refreshToken: string) => {
             return null
         }
         const user = await User.findByPk(stored.userId, { transaction })
-        if (!user) throw unauthorized()
+        if (!user || user.privacyDeletedAt) throw unauthorized()
         await stored.update({ revokedAt: new Date() }, { transaction })
         return issueTokens(user, { transaction })
     })
@@ -111,17 +113,29 @@ export const logout = async (refreshToken: string) => {
 
 export const getUser = async (userId: string) => {
     const user = await User.findByPk(userId)
-    if (!user) throw notFound("User")
+    if (!user || user.privacyDeletedAt) throw notFound("User")
     return toPublicUser(user)
 }
 
 export const updateProfile = async (
     userId: string,
-    changes: Partial<Pick<User, "firstname" | "lastname" | "contact" | "address" | "gender">>,
+    changes: Partial<Pick<User, "firstname" | "lastname" | "contact" | "address" | "gender" | "whatsappOptIn">>,
 ) => {
     const user = await User.findByPk(userId, { useMaster: true })
-    if (!user) throw notFound("User")
-    await user.update(changes)
+    if (!user || user.privacyDeletedAt) throw notFound("User")
+    const updated = { ...changes } as typeof changes & { whatsappOptInAt?: Date | null }
+    const phoneChanged = changes.contact !== undefined && changes.contact !== user.contact
+    if (phoneChanged && changes.whatsappOptIn !== true && user.whatsappOptIn) {
+        updated.whatsappOptIn = false
+        updated.whatsappOptInAt = null
+    }
+    if (changes.whatsappOptIn !== undefined) {
+        if (changes.whatsappOptIn && !/^\+[1-9]\d{7,14}$/.test(changes.contact ?? user.contact ?? "")) {
+            throw badRequest("Add a valid international phone number before opting in to WhatsApp")
+        }
+        updated.whatsappOptInAt = changes.whatsappOptIn ? new Date() : null
+    }
+    await user.update(updated)
     return toPublicUser(user)
 }
 
@@ -134,7 +148,7 @@ export const listUsers = async (page: PageQuery) => {
 
 export const changePassword = async (userId: string, oldPassword: string, newPassword: string) => {
     const user = await User.scope("withSecrets").findByPk(userId, { useMaster: true })
-    if (!user) throw notFound("User")
+    if (!user || user.privacyDeletedAt) throw notFound("User")
     if (!(await bcrypt.compare(oldPassword, user.password))) throw badRequest("Old password is incorrect")
 
     await sequelize.transaction(async (transaction) => {
@@ -185,7 +199,12 @@ export const resetPassword = async (email: string, otp: string, newPassword: str
 
 export const getContact = async (userId: string) => {
     const user = await User.findByPk(userId)
-    return user ? { email: user.email, name: user.firstname || user.username } : null
+    return user && !user.privacyDeletedAt ? {
+        email: user.email,
+        name: user.firstname || user.username,
+        phone: user.contact,
+        whatsappOptIn: user.whatsappOptIn,
+    } : null
 }
 
 // ---- super admin: staff & role management ---------------------------------------------------

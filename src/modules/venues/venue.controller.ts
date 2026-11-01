@@ -2,6 +2,7 @@ import { Request, Response } from "express"
 import { audit } from "../audit"
 import { pageMeta, PageQuery } from "../../shared/pagination"
 import * as venues from "./venue.service"
+import { env } from "../../config/env"
 
 // Public catalogue responses may be cached by browsers and a CDN. `stale-while-revalidate`
 // keeps the page fast while the cache refreshes in the background.
@@ -41,6 +42,18 @@ export const confirmAvailability = async (req: Request, res: Response) => {
     const venue = await venues.confirmVenueAvailability(venueId, req.user!)
     await audit(req, { action: "venue.availability_confirm", entity: "venue", entityId: venueId })
     res.json({ venue })
+}
+
+export const rotateCalendarToken = async (req: Request, res: Response) => {
+    const result = await venues.rotateVenueCalendarToken(String(req.params.venueId), req.user!)
+    await audit(req, { action: "venue.calendar_token.rotate", entity: "venue", entityId: result.venueId })
+    res.set("Cache-Control", "no-store").json({ calendarUrl: `${env.publicBaseUrl}/api/v1/bookings/calendar/${result.venueId}.ics?token=${encodeURIComponent(result.token)}` })
+}
+
+export const imageUploadSignature = async (req: Request, res: Response) => {
+    const result = await venues.createVenueImageUploadSignature(String(req.params.venueId), req.user!)
+    await audit(req, { action: "venue.image_upload_signature", entity: "venue", entityId: String(req.params.venueId) })
+    res.set("Cache-Control", "no-store").json(result)
 }
 
 export const setVerification = async (req: Request, res: Response) => {

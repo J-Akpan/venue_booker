@@ -11,6 +11,9 @@ export class User extends Model<InferAttributes<User>, InferCreationAttributes<U
     declare firstname: string | null
     declare lastname: string | null
     declare contact: string | null
+    declare whatsappOptIn: CreationOptional<boolean>
+    declare whatsappOptInAt: CreationOptional<Date | null>
+    declare privacyDeletedAt: CreationOptional<Date | null>
     declare address: string | null
     declare gender: "Male" | "Female" | "Other" | null
     declare otpHash: string | null
@@ -36,6 +39,9 @@ User.init(
         firstname: { type: DataTypes.STRING(80), allowNull: true },
         lastname: { type: DataTypes.STRING(80), allowNull: true },
         contact: { type: DataTypes.STRING(32), allowNull: true },
+        whatsappOptIn: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+        whatsappOptInAt: { type: DataTypes.DATE, allowNull: true },
+        privacyDeletedAt: { type: DataTypes.DATE, allowNull: true },
         address: { type: DataTypes.STRING(255), allowNull: true },
         gender: { type: DataTypes.ENUM("Male", "Female", "Other"), allowNull: true },
         otpHash: { type: DataTypes.STRING, allowNull: true },

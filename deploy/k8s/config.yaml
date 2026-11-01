@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: venue-booker-config }
+data:
+  NODE_ENV: production
+  TRUST_PROXY: "1"
+  DB_HOST: postgres-primary
+  DB_REPLICA_HOST: postgres-replica
+  DB_NAME: venue_booker
+  DB_USER: venue
+  DB_POOL_MAX: "3"
+  DB_SSL: "true"
+  DB_SYNC: "false"
+  REDIS_URL: redis://redis:6379
+  APP_PUBLIC_URL: https://api.example.com
+  CORS_ORIGINS: https://app.example.com
+  CHECKOUT_SUCCESS_URL: https://app.example.com/payment/success
+  CHECKOUT_CANCEL_URL: https://app.example.com/payment/cancel
+  STRIPE_CONNECT_ENABLED: "false"
+  SMTP_HOST: smtp.gmail.com
+  SMTP_PORT: "587"
+  SMTP_SECURE: "false"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318

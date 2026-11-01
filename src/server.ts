@@ -8,6 +8,7 @@ import { redis } from "./shared/redis"
 import { lifecycle } from "./shared/health"
 import { createApp } from "./app"
 import { connectDatabase, initSchema, startBackground } from "./bootstrap"
+import { assertMigrationsCurrent } from "./shared/migrations"
 
 const SHUTDOWN_GRACE_MS = 25_000
 const LB_DRAIN_DELAY_MS = env.isProd ? 5_000 : 0
@@ -15,6 +16,7 @@ const LB_DRAIN_DELAY_MS = env.isProd ? 5_000 : 0
 const main = async () => {
     await connectDatabase()
     if (env.db.sync) await initSchema()
+    else await assertMigrationsCurrent()
     const stopSweeper = startBackground()
 
     const server = createApp().listen(env.port, () => logger.info({ port: env.port, env: env.nodeEnv }, "server listening"))

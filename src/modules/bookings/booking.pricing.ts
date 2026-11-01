@@ -1,5 +1,10 @@
 import { badRequest } from "../../shared/errors"
 
+export interface RefundTier {
+    noticeHours: number
+    refundPercent: number
+}
+
 export const MIN_SLOT_MINUTES = 30
 export const MAX_BOOKING_DAYS = 14
 
@@ -10,6 +15,14 @@ export const MAX_BOOKING_DAYS = 14
 export const calculateTotal = (startsAt: Date, endsAt: Date, pricePerHour: number): number => {
     const minutes = (endsAt.getTime() - startsAt.getTime()) / 60_000
     return Math.round((minutes * Math.round(pricePerHour * 100)) / 60) / 100
+}
+
+export const cancellationRefundPercent = (rules: RefundTier[], startsAt: Date, cancelledAt = new Date()) => {
+    const noticeHours = Math.max(0, (startsAt.getTime() - cancelledAt.getTime()) / 3_600_000)
+    const tier = [...rules]
+        .filter((rule) => noticeHours >= rule.noticeHours)
+        .sort((a, b) => b.noticeHours - a.noticeHours)[0]
+    return tier?.refundPercent ?? 0
 }
 
 export const assertValidSlot = (startsAt: Date, endsAt: Date, now = new Date()) => {

@@ -2,6 +2,7 @@ import { Request, Response } from "express"
 import { audit } from "../audit"
 import { pageMeta, PageQuery } from "../../shared/pagination"
 import * as users from "./user.service"
+import * as privacy from "./privacy.service"
 
 export const signUp = async (req: Request, res: Response) => {
     const user = await users.signUp(req.body)
@@ -28,8 +29,29 @@ export const me = async (req: Request, res: Response) => {
     res.json({ user: await users.getUser(req.user!.userId) })
 }
 
+export const exportPersonalData = async (req: Request, res: Response) => {
+    const data = await privacy.exportPersonalData(req.user!.userId)
+    await privacy.recordExportRequest(req.user!.userId)
+    await audit(req, { action: "privacy.export", entity: "user", entityId: req.user!.userId })
+    res.set("Cache-Control", "no-store").json({ data })
+}
+
+export const requestDeletion = async (req: Request, res: Response) => {
+    const result = await privacy.createPrivacyRequest(req.user!.userId, "deletion")
+    await audit(req, { action: "privacy.deletion_request", entity: "privacy_request", entityId: result.request.requestId })
+    res.status(result.replayed ? 200 : 201).json({ request: result.request.toJSON(), replayed: result.replayed })
+}
+
+export const privacyRequests = async (req: Request, res: Response) => {
+    res.json({ data: await privacy.listMyPrivacyRequests(req.user!.userId) })
+}
+
 export const updateProfile = async (req: Request, res: Response) => {
-    res.json({ user: await users.updateProfile(req.user!.userId, req.body) })
+    const user = await users.updateProfile(req.user!.userId, req.body)
+    if (Object.prototype.hasOwnProperty.call(req.body, "whatsappOptIn") || Object.prototype.hasOwnProperty.call(req.body, "contact")) {
+        await audit(req, { action: "privacy.whatsapp_consent", entity: "user", entityId: req.user!.userId, metadata: { optedIn: user.whatsappOptIn } })
+    }
+    res.json({ user })
 }
 
 export const changePassword = async (req: Request, res: Response) => {

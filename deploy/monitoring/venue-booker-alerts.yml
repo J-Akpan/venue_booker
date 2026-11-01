@@ -1,0 +1,42 @@
+groups:
+  - name: venue-booker
+    rules:
+      - alert: VenueBookerHigh5xxRate
+        expr: sum(rate(http_request_duration_seconds_count{status=~"5.."}[5m])) / clamp_min(sum(rate(http_request_duration_seconds_count[5m])), 1) > 0.05
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: Venue Booker is returning elevated server errors
+
+      - alert: VenueBookerHighP95Latency
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Venue Booker p95 request latency is above two seconds
+
+      - alert: VenueBookerProviderCircuitOpen
+        expr: max by (name) (circuit_breaker_open) > 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: A Venue Booker external provider circuit is open
+
+      - alert: VenueBookerQueueNotDurable
+        expr: background_queue_durable == 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: Venue Booker background jobs are not using a durable Redis queue
+
+      - alert: VenueBookerBackgroundJobsFailing
+        expr: sum(rate(background_jobs_total{result="failed"}[10m])) / clamp_min(sum(rate(background_jobs_total{result=~"completed|failed"}[10m])), 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than five percent of Venue Booker background jobs are failing

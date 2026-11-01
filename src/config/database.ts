@@ -42,15 +42,15 @@ export const applyDatabaseConstraints = async () => {
     await sequelize.query("CREATE EXTENSION IF NOT EXISTS pg_trgm")
     await sequelize.query(`
         DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'bookings_no_overlap') THEN
-                ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
-                EXCLUDE USING gist ("venueId" WITH =, tstzrange("startsAt", "endsAt") WITH &&)
-                WHERE (status IN ('pending', 'confirmed'));
-            END IF;
             IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'bookings_valid_range') THEN
                 ALTER TABLE bookings ADD CONSTRAINT bookings_valid_range CHECK ("endsAt" > "startsAt");
             END IF;
         END $$;`)
+
+    // Add enum values before rows or constraints start using them. These are no-ops on new schemas.
+    await sequelize.query(`ALTER TYPE "enum_bookings_status" ADD VALUE IF NOT EXISTS 'requested'`)
+    await sequelize.query(`ALTER TYPE "enum_bookings_status" ADD VALUE IF NOT EXISTS 'declined'`)
+    await sequelize.query(`ALTER TYPE "enum_payments_status" ADD VALUE IF NOT EXISTS 'PartiallyRefunded'`)
 
     // Do the duplicate cleanup once, before building the unique index. Subsequent app starts
     // only do a catalog lookup, instead of ranking the entire payments table on every boot.
@@ -118,17 +118,53 @@ export const applyDatabaseConstraints = async () => {
         `ALTER TABLE venues ADD COLUMN IF NOT EXISTS "overtimePricePerHour" DECIMAL(10,2) NOT NULL DEFAULT 0`,
         `ALTER TABLE venues ADD COLUMN IF NOT EXISTS "eventTypes" VARCHAR(60)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(60)[]`,
         `ALTER TABLE venues ADD COLUMN IF NOT EXISTS amenities VARCHAR(60)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(60)[]`,
+        `ALTER TABLE venues ADD COLUMN IF NOT EXISTS "addOns" JSONB NOT NULL DEFAULT '[]'::jsonb`,
         `ALTER TABLE venues ADD COLUMN IF NOT EXISTS "cancellationPolicy" TEXT`,
+        `ALTER TABLE venues ADD COLUMN IF NOT EXISTS "cancellationRules" JSONB NOT NULL DEFAULT '[{"noticeHours":0,"refundPercent":100}]'::jsonb`,
         `ALTER TABLE venues ADD COLUMN IF NOT EXISTS "isVerified" BOOLEAN NOT NULL DEFAULT FALSE`,
         `ALTER TABLE venues ADD COLUMN IF NOT EXISTS "verifiedAt" TIMESTAMPTZ`,
         `ALTER TABLE venues ADD COLUMN IF NOT EXISTS "availabilityConfirmedAt" TIMESTAMPTZ`,
+        `ALTER TABLE venues ADD COLUMN IF NOT EXISTS "calendarTokenHash" VARCHAR(64)`,
+        `ALTER TABLE venues ADD COLUMN IF NOT EXISTS "calendarTokenCreatedAt" TIMESTAMPTZ`,
         `ALTER TABLE venues ALTER COLUMN currency SET DEFAULT 'NGN'`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS "whatsappOptIn" BOOLEAN NOT NULL DEFAULT FALSE`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS "whatsappOptInAt" TIMESTAMPTZ`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS "privacyDeletedAt" TIMESTAMPTZ`,
         `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "eventType" VARCHAR(80)`,
         `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "attendeeCount" INTEGER`,
         `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "priceBreakdown" JSONB NOT NULL DEFAULT '{}'::jsonb`,
         `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "cancellationPolicySnapshot" TEXT`,
+        `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "cancellationRulesSnapshot" JSONB NOT NULL DEFAULT '[]'::jsonb`,
+        `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "cancellationRefundPercent" SMALLINT NOT NULL DEFAULT 0`,
+        `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "ownerRespondedAt" TIMESTAMPTZ`,
+        `ALTER TABLE payments ADD COLUMN IF NOT EXISTS "refundedAmount" DECIMAL(12,2) NOT NULL DEFAULT 0`,
+        `ALTER TABLE payments ADD COLUMN IF NOT EXISTS "destinationAccountId" VARCHAR(100)`,
+        `ALTER TABLE payments ADD COLUMN IF NOT EXISTS "platformFeeAmount" DECIMAL(12,2) NOT NULL DEFAULT 0`,
+        `ALTER TABLE venue_payout_accounts ADD COLUMN IF NOT EXISTS "transfersEnabled" BOOLEAN NOT NULL DEFAULT FALSE`,
     ]
     for (const statement of productColumns) await sequelize.query(statement)
+
+    // Existing bookings predate structured cancellation policies; preserve their historic full-refund behavior.
+    await sequelize.query(`
+        UPDATE bookings
+        SET "cancellationRulesSnapshot" = '[{"noticeHours":0,"refundPercent":100}]'::jsonb
+        WHERE "cancellationRulesSnapshot" = '[]'::jsonb;
+    `)
+    await sequelize.query(`UPDATE payments SET "refundedAmount" = amount WHERE status = 'Refunded' AND "refundedAmount" = 0`)
+
+    const [constraintRows] = await sequelize.query(`
+        SELECT pg_get_constraintdef(oid) AS definition
+        FROM pg_constraint WHERE conname = 'bookings_no_overlap';
+    `)
+    const constraintDefinition = (constraintRows as Array<{ definition: string }>)[0]?.definition ?? ""
+    if (!constraintDefinition.includes("requested")) {
+        await sequelize.query(`ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_no_overlap`)
+        await sequelize.query(`
+            ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap
+            EXCLUDE USING gist ("venueId" WITH =, tstzrange("startsAt", "endsAt") WITH &&)
+            WHERE (status IN ('requested', 'pending', 'confirmed'));
+        `)
+    }
 
     // Query indexes added with CONCURRENTLY so deploying them does not block catalogue writes.
     const indexes = [
@@ -140,6 +176,8 @@ export const applyDatabaseConstraints = async () => {
         `CREATE INDEX CONCURRENTLY IF NOT EXISTS venues_active_created_at ON venues ("createdAt" DESC) WHERE "deletedAt" IS NULL`,
         `CREATE INDEX CONCURRENTLY IF NOT EXISTS venues_active_price ON venues ("pricePerHour") WHERE "deletedAt" IS NULL`,
         `CREATE INDEX CONCURRENTLY IF NOT EXISTS venues_owner_created_at ON venues ("ownerId", "createdAt" DESC) WHERE "deletedAt" IS NULL`,
+        `CREATE INDEX CONCURRENTLY IF NOT EXISTS bookings_venue_created_at ON bookings ("venueId", "createdAt")`,
+        `CREATE INDEX CONCURRENTLY IF NOT EXISTS payments_refund_recovery ON payments ("updatedAt") WHERE status IN ('Completed', 'PartiallyRefunded')`,
         `CREATE INDEX CONCURRENTLY IF NOT EXISTS users_created_at ON users ("createdAt" DESC)`,
         `CREATE INDEX CONCURRENTLY IF NOT EXISTS users_role_created_at ON users ("role", "createdAt" DESC)`,
         `CREATE INDEX CONCURRENTLY IF NOT EXISTS support_cases_created_at ON support_cases ("createdAt" ASC)`,

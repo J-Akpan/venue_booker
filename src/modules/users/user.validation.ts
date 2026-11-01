@@ -27,6 +27,7 @@ export const profileSchema = Joi.object({
     firstname: Joi.string().max(80),
     lastname: Joi.string().max(80),
     contact: Joi.string().max(32),
+    whatsappOptIn: Joi.boolean(),
     address: Joi.string().max(255),
     gender: Joi.string().valid("Male", "Female", "Other"),
 }).min(1)

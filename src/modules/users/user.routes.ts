@@ -17,6 +17,9 @@ router.post("/reset-password", authLimiter, validate(v.resetPasswordSchema), c.r
 
 // authenticated
 router.get("/me", authenticate, c.me)
+router.get("/me/export", authenticate, sensitiveLimiter, c.exportPersonalData)
+router.post("/me/deletion-request", authenticate, sensitiveLimiter, c.requestDeletion)
+router.get("/me/privacy-requests", authenticate, c.privacyRequests)
 router.patch("/me", authenticate, validate(v.profileSchema), c.updateProfile)
 router.put("/me/password", authenticate, authLimiter, validate(v.changePasswordSchema), c.changePassword)
 

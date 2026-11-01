@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import Joi from "joi"
 import { signupSchema, resetPasswordSchema } from "../src/modules/users/user.validation"
 import { createBookingSchema } from "../src/modules/bookings/booking.validation"
 import { paginationSchema } from "../src/shared/pagination"

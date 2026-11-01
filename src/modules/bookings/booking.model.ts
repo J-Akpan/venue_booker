@@ -1,7 +1,7 @@
 import { DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from "sequelize"
 import { sequelize } from "../../config/database"
 
-export type BookingStatus = "pending" | "confirmed" | "cancelled" | "expired"
+export type BookingStatus = "requested" | "pending" | "confirmed" | "declined" | "cancelled" | "expired"
 
 export interface BookingPriceBreakdown {
     venueRental: number
@@ -10,6 +10,7 @@ export interface BookingPriceBreakdown {
     refundableDepositDueToVenue: number
     overtimePricePerHour: number
     currency: string
+    addOns: Array<{ addOnId: string; name: string; chargeUnit: string; unitPrice: number; quantity: number; lineTotal: number }>
 }
 
 export class Booking extends Model<InferAttributes<Booking>, InferCreationAttributes<Booking>> {
@@ -24,6 +25,9 @@ export class Booking extends Model<InferAttributes<Booking>, InferCreationAttrib
     declare attendeeCount: number | null
     declare priceBreakdown: CreationOptional<BookingPriceBreakdown>
     declare cancellationPolicySnapshot: string | null
+    declare cancellationRulesSnapshot: CreationOptional<Array<{ noticeHours: number; refundPercent: number }>>
+    declare cancellationRefundPercent: CreationOptional<number>
+    declare ownerRespondedAt: Date | null
     declare status: CreationOptional<BookingStatus>
     declare expiresAt: Date | null // end of the unpaid hold on the slot
     declare confirmedPaymentId: CreationOptional<string | null>
@@ -46,7 +50,10 @@ Booking.init(
         attendeeCount: { type: DataTypes.INTEGER, allowNull: true, validate: { min: 1 } },
         priceBreakdown: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
         cancellationPolicySnapshot: { type: DataTypes.TEXT, allowNull: true },
-        status: { type: DataTypes.ENUM("pending", "confirmed", "cancelled", "expired"), allowNull: false, defaultValue: "pending" },
+        cancellationRulesSnapshot: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+        cancellationRefundPercent: { type: DataTypes.SMALLINT, allowNull: false, defaultValue: 0, validate: { min: 0, max: 100 } },
+        ownerRespondedAt: { type: DataTypes.DATE, allowNull: true },
+        status: { type: DataTypes.ENUM("requested", "pending", "confirmed", "declined", "cancelled", "expired"), allowNull: false, defaultValue: "requested" },
         expiresAt: { type: DataTypes.DATE, allowNull: true },
         confirmedPaymentId: { type: DataTypes.UUID, allowNull: true, defaultValue: null },
         idempotencyKey: { type: DataTypes.STRING(64), allowNull: true },

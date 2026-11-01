@@ -46,8 +46,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Roll out
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
         run: |
           echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig && export KUBECONFIG=$PWD/kubeconfig
-          kubectl apply -f deploy/k8s/
-          kubectl set image deployment/venue-booker api=ghcr.io/${{ github.repository }}:${{ github.sha }}
+          kubectl apply -f deploy/k8s/config.yaml
+          migration_job="venue-booker-migrate-${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          sed -e "s|ghcr.io/OWNER/venue-booker:latest|${IMAGE}|g" \
+              -e "s|name: venue-booker-migrate|name: ${migration_job}|g" \
+              deploy/k8s/migrate-job.yaml > "$RUNNER_TEMP/migrate-job.yaml"
+          kubectl apply -f "$RUNNER_TEMP/migrate-job.yaml"
+          if ! kubectl wait --for=condition=complete "job/${migration_job}" --timeout=600s; then
+            kubectl logs "job/${migration_job}" --all-containers=true || true
+            exit 1
+          fi
+          sed "s|ghcr.io/OWNER/venue-booker:latest|${IMAGE}|g" deploy/k8s/app.yaml > "$RUNNER_TEMP/app.yaml"
+          kubectl apply -f "$RUNNER_TEMP/app.yaml"
           kubectl rollout status deployment/venue-booker --timeout=180s || (kubectl rollout undo deployment/venue-booker && exit 1)

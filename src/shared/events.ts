@@ -12,8 +12,10 @@ export interface DomainEvents {
     "user.passwordResetRequested": { email: string; otp: string }
     "venue.changed": { venueId: string }
     "booking.created": { bookingId: string; userId: string; venueId: string }
+    "booking.accepted": { bookingId: string; userId: string; venueId: string }
+    "booking.declined": { bookingId: string; userId: string; venueId: string; reason: string | null }
     "booking.confirmed": { bookingId: string; userId: string; venueId: string }
-    "booking.cancelled": { bookingId: string; userId: string; venueId: string; refund: boolean }
+    "booking.cancelled": { bookingId: string; userId: string; venueId: string; refund: boolean; refundPercent: number }
     "case.resolved": { caseId: string; raisedBy: string; type: "complaint" | "dispute"; outcome: "resolved" | "rejected"; resolution: string }
 }
 

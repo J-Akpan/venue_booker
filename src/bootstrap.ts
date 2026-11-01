@@ -1,14 +1,14 @@
-import { applyDatabaseConstraints, sequelize } from "./config/database"
+import { sequelize } from "./config/database"
 import { logger } from "./shared/logger"
 import { startQueue } from "./shared/queue"
 import { initNotifications } from "./modules/notifications"
-import { initPayments } from "./modules/payments"
+import { initPayments, recoverOutstandingRefunds } from "./modules/payments"
 import { expireStaleHolds } from "./modules/bookings"
 import "./modules/audit"
 import "./modules/support"
 import "./modules/reviews/review.model"
-
-const SCHEMA_LOCK_ID = 7_426_001 // arbitrary app-wide constant
+import "./modules/users/privacy-request.model"
+import { runMigrations } from "./shared/migrations"
 
 const sleep =(ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -29,21 +29,11 @@ export const connectDatabase = async (attempts = 8) => {
 }
 
 /**
- * Create missing tables and DB-level constraints. No `alter`: it can drop or rewrite columns.
- * For evolving an existing production schema use reviewed, versioned migrations instead.
+ * Apply recorded, additive schema migrations. Production deploys run the same command explicitly
+ * before app replicas start; local development can apply pending migrations on startup.
  */
 export const initSchema = async () => {
-    // Several instances booting together would race on CREATE TABLE. A session-level advisory lock,
-    // held on one dedicated connection, makes them take turns; later ones find nothing left to do.
-    const lockConn: any = await sequelize.connectionManager.getConnection({ type: "write" })
-    try {
-        await lockConn.query("SELECT pg_advisory_lock($1)", [SCHEMA_LOCK_ID])
-        await sequelize.sync()
-        await applyDatabaseConstraints()
-    } finally {
-        await lockConn.query("SELECT pg_advisory_unlock($1)", [SCHEMA_LOCK_ID]).catch(() => {})
-        sequelize.connectionManager.releaseConnection(lockConn)
-    }
+    await runMigrations()
     logger.info("schema ready")
 }
 
@@ -53,9 +43,18 @@ export const startBackground = () => {
     initPayments()
     startQueue()
 
+    void recoverOutstandingRefunds().catch((err) => logger.error({ err }, "refund recovery scan failed"))
+    const refundRecovery = setInterval(() => {
+        recoverOutstandingRefunds().catch((err) => logger.error({ err }, "refund recovery scan failed"))
+    }, 60_000)
+    refundRecovery.unref()
+
     const sweeper = setInterval(() => {
         expireStaleHolds().catch((err) => logger.error({ err }, "hold expiry sweep failed"))
     }, 30_000)
     sweeper.unref()
-    return () => clearInterval(sweeper)
+    return () => {
+        clearInterval(sweeper)
+        clearInterval(refundRecovery)
+    }
 }

@@ -26,6 +26,25 @@ export const createCheckoutSession = withBreaker(
 
 export const createRefund = withBreaker(
     "stripe",
-    (paymentIntent: string, idempotencyKey: string) => stripe().refunds.create({ payment_intent: paymentIntent }, { idempotencyKey }),
+    (paymentIntent: string, idempotencyKey: string, amount?: number, reverseTransfer = false, refundApplicationFee = reverseTransfer) => stripe().refunds.create({
+        payment_intent: paymentIntent,
+        ...(amount !== undefined ? { amount } : {}),
+        ...(reverseTransfer ? { reverse_transfer: true } : {}),
+        ...(reverseTransfer && refundApplicationFee ? { refund_application_fee: true } : {}),
+    }, { idempotencyKey }),
     { isClientError },
 )
+
+export const createConnectedAccount = withBreaker(
+    "stripe",
+    (params: Stripe.AccountCreateParams, idempotencyKey: string) => stripe().accounts.create(params, { idempotencyKey }),
+    { isClientError },
+)
+
+export const createAccountLink = withBreaker(
+    "stripe",
+    (account: string, refreshUrl: string, returnUrl: string) => stripe().accountLinks.create({ account, refresh_url: refreshUrl, return_url: returnUrl, type: "account_onboarding" }),
+    { isClientError },
+)
+
+export const retrieveConnectedAccount = withBreaker("stripe", (account: string) => stripe().accounts.retrieve(account), { isClientError })

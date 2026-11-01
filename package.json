@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:init": "tsx scripts/db-init.ts",
+    "db:migrate": "tsx scripts/db-init.ts",
+    "db:migrate:compiled": "node dist/db-migrate.js",
     "create-super-admin": "tsx scripts/create-super-admin.ts"
   },
   "author": "J-Akpan",

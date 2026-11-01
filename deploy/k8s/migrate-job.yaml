@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: venue-booker-migrate
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/OWNER/venue-booker:latest # Pin to the same commit image as the API rollout.
+          command: ["node", "dist/db-migrate.js"]
+          envFrom:
+            - configMapRef: { name: venue-booker-config }
+            - secretRef: { name: venue-booker-secrets }
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { memory: 384Mi }

@@ -1,6 +1,14 @@
 import { DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from "sequelize"
 import { sequelize } from "../../config/database"
 
+export interface VenueAddOn {
+    addOnId: string
+    name: string
+    description: string | null
+    price: number
+    chargeUnit: "flat" | "per_person" | "per_hour"
+}
+
 export class Venue extends Model<InferAttributes<Venue>, InferCreationAttributes<Venue>> {
     declare venueId: CreationOptional<string>
     declare ownerId: string
@@ -17,10 +25,14 @@ export class Venue extends Model<InferAttributes<Venue>, InferCreationAttributes
     declare pictures: CreationOptional<string[]>
     declare eventTypes: CreationOptional<string[]>
     declare amenities: CreationOptional<string[]>
+    declare addOns: CreationOptional<VenueAddOn[]>
     declare cancellationPolicy: CreationOptional<string | null>
+    declare cancellationRules: CreationOptional<Array<{ noticeHours: number; refundPercent: number }>>
     declare isVerified: CreationOptional<boolean>
     declare verifiedAt: CreationOptional<Date | null>
     declare availabilityConfirmedAt: CreationOptional<Date | null>
+    declare calendarTokenHash: CreationOptional<string | null>
+    declare calendarTokenCreatedAt: CreationOptional<Date | null>
     declare readonly createdAt: CreationOptional<Date>
     declare readonly updatedAt: CreationOptional<Date>
     declare readonly deletedAt: CreationOptional<Date | null>
@@ -43,10 +55,14 @@ Venue.init(
         pictures: { type: DataTypes.ARRAY(DataTypes.TEXT), allowNull: false, defaultValue: [] },
         eventTypes: { type: DataTypes.ARRAY(DataTypes.STRING(60)), allowNull: false, defaultValue: [] },
         amenities: { type: DataTypes.ARRAY(DataTypes.STRING(60)), allowNull: false, defaultValue: [] },
+        addOns: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
         cancellationPolicy: { type: DataTypes.TEXT, allowNull: true },
+        cancellationRules: { type: DataTypes.JSONB, allowNull: false, defaultValue: [{ noticeHours: 0, refundPercent: 100 }] },
         isVerified: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
         verifiedAt: { type: DataTypes.DATE, allowNull: true },
         availabilityConfirmedAt: { type: DataTypes.DATE, allowNull: true },
+        calendarTokenHash: { type: DataTypes.STRING(64), allowNull: true },
+        calendarTokenCreatedAt: { type: DataTypes.DATE, allowNull: true },
         createdAt: DataTypes.DATE,
         updatedAt: DataTypes.DATE,
         deletedAt: DataTypes.DATE,

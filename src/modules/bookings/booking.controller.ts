@@ -27,7 +27,7 @@ export const availability = async (req: Request, res: Response) => {
 }
 
 export const quote = async (req: Request, res: Response) => {
-    const input = req.query as unknown as { venueId: string; startsAt: Date; endsAt: Date; eventType?: string; attendeeCount?: number }
+    const input = req.query as unknown as { venueId: string; startsAt: Date; endsAt: Date; eventType?: string; attendeeCount?: number; addOns?: Array<{ addOnId: string; quantity: number }> }
     res.set("Cache-Control", "private, no-store")
     res.json({ quote: await bookings.quoteBooking(input) })
 }
@@ -44,6 +44,33 @@ export const forVenue = async (req: Request, res: Response) => {
     res.json({ data: rows, meta: pageMeta(page, total) })
 }
 
+export const venueAnalytics = async (req: Request, res: Response) => {
+    res.json({ analytics: await bookings.getVenueAnalytics(String(req.params.venueId), req.user!, req.query as { from?: Date; to?: Date }) })
+}
+
+const icsEscape = (value: string) => value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n")
+const icsDate = (value: Date) => value.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")
+
+export const calendarFeed = async (req: Request, res: Response) => {
+    const events = await bookings.getCalendarEvents(String(req.params.venueId), String(req.query.token))
+    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Venue Booker//Calendar//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"]
+    for (const event of events) {
+        lines.push(
+            "BEGIN:VEVENT",
+            `UID:${event.bookingId}@venue-booker`,
+            `DTSTAMP:${icsDate(new Date())}`,
+            `DTSTART:${icsDate(event.startsAt)}`,
+            `DTEND:${icsDate(event.endsAt)}`,
+            `SUMMARY:${icsEscape(event.status === "confirmed" ? "Venue booked" : "Venue on hold")}`,
+            `STATUS:${event.status === "confirmed" ? "CONFIRMED" : "TENTATIVE"}`,
+            "CLASS:PRIVATE",
+            "END:VEVENT",
+        )
+    }
+    lines.push("END:VCALENDAR")
+    res.set({ "Content-Type": "text/calendar; charset=utf-8", "Cache-Control": "private, no-store" }).send(lines.join("\r\n"))
+}
+
 export const get = async (req: Request, res: Response) => {
     res.json({ booking: await bookings.getBooking(String(req.params.bookingId), req.user!) })
 }
@@ -52,5 +79,19 @@ export const cancel = async (req: Request, res: Response) => {
     const bookingId = String(req.params.bookingId)
     const booking = await bookings.cancelBooking(bookingId, req.user!)
     await audit(req, { action: "booking.cancel", entity: "booking", entityId: bookingId })
+    res.json({ booking })
+}
+
+export const accept = async (req: Request, res: Response) => {
+    const bookingId = String(req.params.bookingId)
+    const booking = await bookings.acceptBookingRequest(bookingId, req.user!)
+    await audit(req, { action: "booking.accept", entity: "booking", entityId: bookingId })
+    res.json({ booking })
+}
+
+export const decline = async (req: Request, res: Response) => {
+    const bookingId = String(req.params.bookingId)
+    const booking = await bookings.declineBookingRequest(bookingId, req.user!, req.body.reason ?? undefined)
+    await audit(req, { action: "booking.decline", entity: "booking", entityId: bookingId })
     res.json({ booking })
 }

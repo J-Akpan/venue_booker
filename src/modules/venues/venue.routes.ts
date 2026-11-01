@@ -17,6 +17,8 @@ router.get("/:venueId", validate(v.venueIdSchema, "params"), c.get)
 router.post("/", authenticate, requireRole("Venue Owner"), validate(v.createVenueSchema), c.create)
 router.patch("/:venueId", authenticate, requireRole("Venue Owner"), validate(v.venueIdSchema, "params"), validate(v.updateVenueSchema), c.update)
 router.post("/:venueId/availability-confirmation", authenticate, requireRole("Venue Owner"), validate(v.venueIdSchema, "params"), c.confirmAvailability)
+router.post("/:venueId/calendar-token", authenticate, requireRole("Venue Owner"), validate(v.venueIdSchema, "params"), c.rotateCalendarToken)
+router.post("/:venueId/image-upload-signature", authenticate, requireRole("Venue Owner"), validate(v.venueIdSchema, "params"), c.imageUploadSignature)
 router.post("/:venueId/verification", authenticate, requireRole("Admin"), validate(v.venueIdSchema, "params"), validate(v.setVenueVerificationSchema), c.setVerification)
 router.delete("/:venueId", authenticate, requireRole("Venue Owner"), validate(v.venueIdSchema, "params"), c.remove)
 
