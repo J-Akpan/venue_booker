@@ -16,6 +16,7 @@ const schema = Joi.object({
     PORT: Joi.number().port().default(4000),
     LOG_LEVEL: Joi.string().valid("fatal", "error", "warn", "info", "debug", "trace", "silent").default("info"),
     TRUST_PROXY: Joi.number().integer().min(0).default(0),
+    FRONTEND_URL: Joi.string().uri({ scheme: ["http", "https"] }).allow("").default(""),
     CORS_ORIGINS: Joi.string().allow("").default(""),
     APP_PUBLIC_URL: Joi.string().uri().default("http://localhost:4000"),
 
@@ -108,7 +109,10 @@ export const env = {
     port: value.PORT as number,
     logLevel: value.LOG_LEVEL as string,
     trustProxy: value.TRUST_PROXY as number,
-    corsOrigins: (value.CORS_ORIGINS as string).split(",").map((s) => s.trim()).filter(Boolean),
+    corsOrigins: [...new Set([
+        ...(value.FRONTEND_URL ? [new URL(value.FRONTEND_URL as string).origin] : []),
+        ...(value.CORS_ORIGINS as string).split(",").map((s) => s.trim()).filter(Boolean),
+    ])],
     publicBaseUrl: (value.APP_PUBLIC_URL as string).replace(/\/$/, ""),
     db: {
         name: value.DB_NAME as string,

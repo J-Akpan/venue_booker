@@ -13,7 +13,8 @@ data:
   DB_SYNC: "false"
   REDIS_URL: redis://redis:6379
   APP_PUBLIC_URL: https://api.example.com
-  CORS_ORIGINS: https://app.example.com
+  FRONTEND_URL: https://app.example.com
+  CORS_ORIGINS: ""
   CHECKOUT_SUCCESS_URL: https://app.example.com/payment/success
   CHECKOUT_CANCEL_URL: https://app.example.com/payment/cancel
   STRIPE_CONNECT_ENABLED: "false"
